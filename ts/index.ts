@@ -83,7 +83,7 @@ export function info() {
 export function remove() {
     rxFiglet( LOGO, undefined )
     .doOnNext( (logo) => console.log( chalk.magenta(logo as string) ) )
-    .flatMap( () => rxConfig(false) )
+    .flatMap( rxConfig(false) )
     .flatMap( (result) => rxConfluenceConnection( result[0], result[1]  ) )
     .flatMap( (result) => rxDelete( result[0], result[1] ) )
     .subscribe(
