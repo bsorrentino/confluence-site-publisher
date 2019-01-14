@@ -1,2 +1,3 @@
-# confluence-publishing-cli
-Publish documentation directly to confluence allowing to keep in-sync local and remote documentation
+# confluence-publisher
+
+CLI for publish directly to confluence allowing to keep in-sync local and remote documentation
