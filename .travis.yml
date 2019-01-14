@@ -1,0 +1,13 @@
+language: node_js
+node_js:
+- 8.9.4
+services:
+- docker
+deploy:
+  provider: npm
+  email: bartolomeo.sorrentino@gmail.com
+  api_key:
+    secure: qRxnA/rCewdLK6QcgIV8uu2pr9/PvMTgY0qaMv+Qjup/G/qlLNkZ+LihwMHJak5E2Mwzdac8SouJnHxOl7QBtAj3gdm0LASUrFSuFxhC/65e1Rg1tRV4Hb+Nt023x2mhDKlloTyPDG+utYI5llELPV+nVn8s2VkbrM5qgbjLEMC3L38EkYGjctoiuFrrRo0jNSqMmlN2Gyz5k8zFdKLflQfLqTkIMEagXw+irpBVWkZIOrKDp3MEoJh5F07hH6OegqWEEXEtlAUdBkJeTfCxuaa9KufqENHvSY/9g69UwUSvzP3r3SKXWTwU24VHinYxxVKAy1DUUPekO4ep6+pPOCFRw/xZLE2Hql4zS8K+gN5pqXJTlrygWcz0wkycLbtF4caDwqCjA9pRDsOrAyH22s4wmtf8XJimfOYgbuovH9pLD5iwHnBFlQKyFyT4nMCu8VhoDu7lJKbBE6NskHqyCS8LYO0o3476HPrPaQmh6ZxvMKuZUOObzNRMguTPeTPkmsMHseJs9gHcGUCq5wF73BItWzOpjwtbnaFfgq1QqGqd2lfyzzy4AU5NnxFA9mBLrVPKkVkUDH4SuIMjEHFlHVhELg6zUfr/vYOPyTuyS8plwix1xsFuYgix+W3qGxQvVfhsekF2PiwwAkXZn3tiKJZR1joQRc7n/ftaBEBeHjY=
+  on:
+    tags: true
+    repo: bsorrentino/confluence-site-publisher
