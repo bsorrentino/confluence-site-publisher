@@ -12,7 +12,7 @@
 
 ## Description 
 
-A CLI (*Command Line Interface*) to manage a Confluence's Site. 
+A CLI (*Command Line Interface*) for publish directly to confluence allowing to keep in-sync local and remote documentation
 
 This project should be considered as **[NodeJS](https://nodejs.org/)** version of the [confluence maven plugin](https://github.com/bsorrentino/maven-confluence-plugin) developed using [reactive javascript extension](https://github.com/Reactive-Extensions/RxJS)
 
@@ -147,3 +147,5 @@ After this, you can execute:
 ```
 npm publish
 ```
+
+
