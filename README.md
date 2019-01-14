@@ -1,9 +1,12 @@
 
-[![npm](https://img.shields.io/badge/npm-v8.9.4-green.svg)](https://www.npmjs.com/package/confluence-site)&nbsp;
-<!--img src="https://img.shields.io/github/forks/amanganiello90/maven-confluence-plugin.svg">&nbsp;
-<img src="https://img.shields.io/github/stars/amanganiello90/maven-confluence-plugin.svg">&nbsp;
-<a href="https://github.com/amanganiello90/maven-confluence-plugin/issues"><img src="https://img.shields.io/github/issues/amanganiello90/maven-confluence-plugin.svg">
-</a>&nbsp;[![Build Status](https://travis-ci.org/amanganiello90/maven-confluence-plugin.svg)](https://travis-ci.org/amanganiello90/maven-confluence-plugin)
+[![npm](https://img.shields.io/npm/v/confluence-site.svg)](https://www.npmjs.com/package/confluence-site)&nbsp;
+<img src="https://img.shields.io/github/forks/bsorrentino/confluence-site-publisher.svg">&nbsp;
+<img src="https://img.shields.io/github/stars/bsorrentino/confluence-site-publisher.svg">&nbsp;
+<a href="https://github.com/bsorrentino/confluence-site-publisher/issues">
+<img src="https://img.shields.io/github/issues/bsorrentino/confluence-site-publisher.svg">
+</a>&nbsp;
+<!--
+[![Build Status](https://travis-ci.org/amanganiello90/maven-confluence-plugin.svg)](https://travis-ci.org/amanganiello90/maven-confluence-plugin)
 -->
 
 ```
