@@ -1,8 +1,10 @@
 
-[![npm](https://img.shields.io/badge/npm-v8.9.4-green.svg)](https://www.npmjs.com/package/confluence-site)&nbsp;<img src="https://img.shields.io/github/forks/amanganiello90/maven-confluence-plugin.svg">&nbsp;
-<img src="https://img.shields.io/github/stars/amanganiello90/maven-confluence-plugin.svg">&nbsp;<a href="https://github.com/amanganiello90/maven-confluence-plugin/issues"><img src="https://img.shields.io/github/issues/amanganiello90/maven-confluence-plugin.svg">
+[![npm](https://img.shields.io/badge/npm-v8.9.4-green.svg)](https://www.npmjs.com/package/confluence-site)&nbsp;
+<!--img src="https://img.shields.io/github/forks/amanganiello90/maven-confluence-plugin.svg">&nbsp;
+<img src="https://img.shields.io/github/stars/amanganiello90/maven-confluence-plugin.svg">&nbsp;
+<a href="https://github.com/amanganiello90/maven-confluence-plugin/issues"><img src="https://img.shields.io/github/issues/amanganiello90/maven-confluence-plugin.svg">
 </a>&nbsp;[![Build Status](https://travis-ci.org/amanganiello90/maven-confluence-plugin.svg)](https://travis-ci.org/amanganiello90/maven-confluence-plugin)
-
+-->
 
 ```
  __   __        ___            ___       __   ___     __    ___  ___ 
@@ -12,7 +14,7 @@
 
 ## Description 
 
-A CLI (*Command Line Interface*) for publish directly to confluence allowing to keep in-sync local and remote documentation
+A CLI (*Command Line Interface*) for publish your site directly to confluence allowing to keep in-sync local and remote documentation
 
 This project should be considered as **[NodeJS](https://nodejs.org/)** version of the [confluence maven plugin](https://github.com/bsorrentino/maven-confluence-plugin) developed using [reactive javascript extension](https://github.com/Reactive-Extensions/RxJS)
 
