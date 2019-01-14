@@ -1,12 +1,12 @@
 {
   "name": "confluence-site",
   "version": "1.0.4-alpha",
-  "description": "A Command Line Interface (CLI) to manage a Confluence's Site. ",
+  "description": "A Command Line Interface (CLI) for publish your site directly to confluence",
   "bin": "./main.js",
   "main": "main.js",
-  "homepage": "https://github.com/bsorrentino/maven-confluence-plugin/tree/cli",
+  "homepage": "https://github.com/bsorrentino/confluence-site-publisher.git",
   "bugs": {
-    "url": "https://github.com/bsorrentino/maven-confluence-plugin/labels/cli",
+    "url": "https://github.com/bsorrentino/confluence-site-publisher.git",
     "email": "bartolomeo.sorrentino@gmail.com"
   },
   "scripts": {
