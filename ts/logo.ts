@@ -1,5 +1,17 @@
 
-import Rx = require("rx");
+import {
+    Observable,
+    bindNodeCallback,
+    Subscriber,
+    combineLatest,
+    of,
+    from,
+} from 'rxjs';
+
+import {
+    flatMap,
+    filter,
+} from 'rxjs/operators';
 
 interface Figlet {
     ( input:string, font:string, callback:(err:any, res:string) => void  ):void;
@@ -16,48 +28,48 @@ interface FigletMetadata {
     headerComment:string;
 }
 
-let rxFonts = Rx.Observable.fromNodeCallback( figlet.fonts );
+let rxFonts = bindNodeCallback( figlet.fonts );
 
-let rxFiglet =  Rx.Observable.fromNodeCallback( figlet );
+let rxFiglet =  bindNodeCallback( figlet );
 
-function rxMetadata( font:string ):Rx.Observable<FigletMetadata> {
-    return  Rx.Observable.create<FigletMetadata>( (subscriber) => {
+function rxMetadata( font:string ):Observable<FigletMetadata> {
+    return  Observable.create( (subscriber:Subscriber<FigletMetadata>) => {
         figlet.metadata('Standard', function(err, options, headerComment) {
             if (err) {
-                subscriber.onError(err);
+                subscriber.error(err);
                 return;
             }
 
-            subscriber.onNext( { font:font, options:options, headerComment:headerComment });
-            subscriber.onCompleted();
+            subscriber.next( { font:font, options:options, headerComment:headerComment });
+            subscriber.complete();
         });
     } );
 } 
 
 const VALUE = 'Confluence\n     CLI';
 
-function rxShowFont(font:string ):Rx.Observable<any> {
+function rxShowFont(font:string ):Observable<any> {
 
     return rxMetadata( font )
-        .flatMap( (metadata) => Rx.Observable.combineLatest( 
-                                    Rx.Observable.just(metadata), 
-                                    rxFiglet( VALUE, metadata.font ), 
+        .pipe( flatMap( (metadata) => 
+                combineLatest( of(metadata), 
+                               rxFiglet( VALUE, metadata.font ), 
                                     ( m, d ) => {     
                                         return {meta:m, data:d} 
-                                    }) )
+                                    }) ))
         ;       
 }
 
-function rxShowAllFonts():Rx.Observable<any> {
+function rxShowAllFonts():Observable<any> {
     return rxFonts()
-    .flatMap( values => Rx.Observable.fromArray(values) )
-    .flatMap( rxShowFont );
+        .pipe( flatMap( values => from(values) ) )
+        .pipe( flatMap( rxShowFont ) );
 }
 
 
 function showAllFont() {
     rxShowAllFonts()
-    .filter( (data) => data['meta']['options']['height'] < 8 )
+    .pipe( filter( (data) => data['meta']['options']['height'] < 8 ) )
     .subscribe( (data) => {
         console.log( 
             "\n===============================\n",
@@ -78,7 +90,7 @@ function clrscr() {
 
 clrscr();
 
-Rx.Observable.of( "Larry 3D 2", "Stick Letters")
-.flatMap( rxShowFont )
+of( "Larry 3D 2", "Stick Letters")
+.pipe( flatMap( rxShowFont ) )
 .subscribe( (data) => console.log(data['data']) );
 
