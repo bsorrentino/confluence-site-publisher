@@ -13,8 +13,10 @@ import * as chalk from "chalk";
 import request = require("request");
 
 import minimist     = require("minimist");
-import Rx           = require("rx");
 import Preferences  = require("preferences");
+
+import { Observable, Observer, throwError, of, from, bindNodeCallback, empty, concat,combineLatest } from 'rxjs';
+import { flatMap, map, tap, concatMap, filter, reduce } from 'rxjs/operators';
 
 interface Figlet {
   ( input:string, font:string|undefined, callback:(err:any, res:string) => void  ):void;
@@ -27,7 +29,7 @@ const figlet:Figlet = require('figlet');
 const LOGO      = 'Confluence Site';
 const LOGO_FONT = 'Stick Letters';
 
-let rxFiglet = Rx.Observable.fromNodeCallback( figlet );
+let rxFiglet = bindNodeCallback( figlet );
 
 let argv = process.argv.slice(2);
 
@@ -44,12 +46,12 @@ export function deploy() {
   //console.dir( args );
 
   rxFiglet( LOGO, undefined )
-    .doOnNext( (logo) => console.log( chalk.magenta(logo as string) ) )
+    .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
     //.map( (logo) => args['config'] || false )
     //.doOnNext( (v) => console.log( "force config", v, args))
-    .flatMap( (logo) => rxConfig(args['config'] || false ) )
-    .flatMap( ([config,credentials]) => rxConfluenceConnection( config, credentials  ) )
-    .flatMap( ([confluence,config]) => rxGenerateSite( config, confluence ) )
+    .pipe( flatMap( (logo) => rxConfig(args['config'] || false ) ))
+    .pipe( flatMap( ([config,credentials]) => rxConfluenceConnection( config, credentials  ) ))
+    .pipe( flatMap( ([confluence,config]) => rxGenerateSite( config, confluence ) ))
     .subscribe(
       //(result) => console.dir( result, {depth:2} ),
       (result) => {},
@@ -60,8 +62,8 @@ export function deploy() {
 
 export function init() {
     rxFiglet( LOGO, undefined )
-    .doOnNext( (logo) => console.log( chalk.magenta(logo as string) ) )
-    .flatMap( () => rxConfig( true, args['serverid']) )
+    .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
+    .pipe( flatMap( () => rxConfig( true, args['serverid']) ))
     .subscribe(
       (value)=> {},
       (err)=> console.error( chalk.red(err) )
@@ -71,8 +73,8 @@ export function init() {
 
 export function info() {
     rxFiglet( LOGO, undefined )
-    .doOnNext( (logo) => console.log( chalk.magenta(logo as string) ) )
-    .flatMap( () => rxConfig( false ) )
+    .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
+    .pipe( flatMap( () => rxConfig( false ) ))
     .subscribe(
       (value)=> {},
       (err)=> console.error( chalk.red(err) )
@@ -82,10 +84,10 @@ export function info() {
 
 export function remove() {
     rxFiglet( LOGO, undefined )
-    .doOnNext( (logo) => console.log( chalk.magenta(logo as string) ) )
-    .flatMap( rxConfig(false) )
-    .flatMap( (result) => rxConfluenceConnection( result[0], result[1]  ) )
-    .flatMap( (result) => rxDelete( result[0], result[1] ) )
+    .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
+    .pipe( flatMap( v => rxConfig(false) ))
+    .pipe( flatMap( (result) => rxConfluenceConnection( result[0], result[1]  ) ))
+    .pipe( flatMap( (result) => rxDelete( result[0], result[1] ) ))
     .subscribe(
       (value)=> { console.log( "# page(s) removed ", value )},
       (err)=> console.error( chalk.red(err) )
@@ -95,8 +97,8 @@ export function remove() {
 
 export function download( pageId:string, fileName:string, isStorageFormat = true ) {
 
-  function rxRequest( config:Config, credentials:Credentials ):Rx.Observable<string> {
-    return Rx.Observable.create( (observer) => {
+  function rxRequest( config:Config, credentials:Credentials ):Observable<string> {
+    return Observable.create( (observer:Observer<string>) => {
 
       let pathname = isStorageFormat ?
       "/plugins/viewstorage/viewpagestorage.action" :
@@ -117,16 +119,16 @@ export function download( pageId:string, fileName:string, isStorageFormat = true
         url:input
       } )
       .pipe( fs.createWriteStream(fileName) )
-      .on("end", () => observer.onCompleted() )
-      .on("error", (err) => observer.onError(err) );
+      .on("end", () => observer.complete() )
+      .on("error", (err) => observer.error(err) );
     });
   }
 
 
   rxFiglet( LOGO, undefined )
-  .doOnNext( (logo) => console.log( chalk.magenta(logo as string) ) )
-  .flatMap( () => rxConfig( false ) )
-  .flatMap( ([config,credentials]) => rxRequest( config, credentials) )
+  .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
+  .pipe( flatMap( () => rxConfig( false ) ))
+  .pipe(  flatMap( ([config,credentials]) => rxRequest( config, credentials) ))
   .subscribe( 
     (res) => {
       console.log(res)
@@ -201,7 +203,7 @@ function usageCommand( cmd:string, desc:string, ...args: string[]) {
 function usage() {
 
   rxFiglet( LOGO, LOGO_FONT )
-  .doOnCompleted( () => process.exit(-1) )
+  .pipe( tap( undefined, undefined, () => process.exit(-1) ))
   .subscribe( (logo) => {
 
     console.log( chalk.bold.magenta(logo as string),
@@ -254,16 +256,16 @@ function newSiteProcessor( confluence:XMLRPCConfluenceService, config:Config ):S
  */
 function rxConfluenceConnection(
                 config:Config,
-                credentials:Credentials ):Rx.Observable<[XMLRPCConfluenceService,Config]>
+                credentials:Credentials ):Observable<[XMLRPCConfluenceService,Config]>
 {
 
       let service = XMLRPCConfluenceService.create( config, credentials );
 
-      let rxConnection = Rx.Observable.fromPromise( service );
+      let rxConnection = from( service );
 
-      let rxCfg = Rx.Observable.just( config );
+      let rxCfg = of( config );
 
-      return Rx.Observable.combineLatest( rxConnection, rxCfg, 
+      return combineLatest( rxConnection, rxCfg, 
                 (conn, conf) => { return [conn, conf] as [XMLRPCConfluenceService,Config]; } );
 
 }
@@ -271,58 +273,61 @@ function rxConfluenceConnection(
 /**
  * 
  */
-function rxDelete( confluence:XMLRPCConfluenceService, config:Config  ):Rx.Observable<number> {
+function rxDelete( confluence:XMLRPCConfluenceService, config:Config  ):Observable<number> {
     //let recursive = args['recursive'] || false;
 
     let siteFile = path.basename( config.sitePath );
 
     let site = newSiteProcessor( confluence, config );
     
-    let rxParentPage = Rx.Observable.fromPromise( confluence.getPage( config.spaceId, config.parentPageTitle) );
+    let rxParentPage = from( confluence.getPage( config.spaceId, config.parentPageTitle) );
     let rxParseSite = site.rxParse( siteFile );
 
-    return Rx.Observable.combineLatest( rxParentPage, rxParseSite, 
+    return combineLatest( rxParentPage, rxParseSite, 
             (parent,home) => [parent,home] as [Model.Page,Array<Object>])
               //.doOnNext( (result) => console.dir( result ) )
-              .flatMap( (result) => {
+              .pipe( flatMap( (result) => {
                 
                 let [parent,pages] = result;
                 let first = pages[0] as Element ;
                 
-                let getHome = Rx.Observable.fromPromise( confluence.getPageByTitle( parent.id as string, first.$.name as string) );
+                let getHome = from( confluence.getPageByTitle( parent.id as string, first.$.name as string) );
 
                 return getHome
-                        .filter( (home) => home!=null )
-                        .flatMap( (home) => 
-                              Rx.Observable.fromPromise(confluence.getDescendents( home.id as string))
-                                        .flatMap( summaries => Rx.Observable.fromArray(summaries) )
-                                        .flatMap( (page:Model.PageSummary) => Rx.Observable.fromPromise(confluence.removePageById( page.id as string))
-                                        .doOnNext( r => console.log( "page:", page.title, "removed!", r )) )
-                                        .reduce( ( acc, x ) => ++acc, 0 )
-                                        .flatMap( n => 
-                                              Rx.Observable.fromPromise(confluence.removePageById(home.id as string) )
-                                                              .doOnNext( (r) => console.log( "page:", home.title, "removed!", r ))
-                                                              .map( (value) => ++n )
-                                        )
-                          )
+                        .pipe( filter( (home) => home!=null ) )
+                        .pipe( flatMap( (home) => 
+                              from(confluence.getDescendents( home.id as string))
+                                        .pipe( flatMap( summaries => from(summaries) ))
+                                        .pipe( flatMap( (page:Model.PageSummary) => 
+                                                from(confluence.removePageById( page.id as string))
+                                                .pipe( tap( r => console.log( "page:", page.title, "removed!", r )) )
+                                                .pipe( map( r => 1))
+                                                ))
+                                        .pipe( reduce( ( acc, x ) => ++acc, 0 ))
+                                        .pipe( flatMap( n => 
+                                              from(confluence.removePageById(home.id as string) )
+                                                              .pipe( tap( (r) => console.log( "page:", home.title, "removed!", r )))
+                                                              .pipe( map( (value) => ++n ) )
+                                        ))
+                          ))
                         ;
                         
-              })                        
+              }) )                       
 }
 
 /**
  * 
  */
-function rxGenerateSite( config:Config, confluence:XMLRPCConfluenceService ):Rx.Observable<any> {
+function rxGenerateSite( config:Config, confluence:XMLRPCConfluenceService ):Observable<any> {
 
     let siteFile = path.basename( config.sitePath );
 
     let site = newSiteProcessor( confluence, config );
 
     return site.rxStart( siteFile )
-      .doOnCompleted( () => confluence.connection.logout().then( () => {
+      .pipe( tap( undefined, undefined, () => confluence.connection.logout().then( () => {
         //console.log("logged out!");
-      }));
+      })));
 
 }
 
