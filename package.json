@@ -1,6 +1,6 @@
 {
   "name": "confluence-site",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "A Command Line Interface (CLI) for publish your site directly to confluence",
   "bin": "./main.js",
   "main": "main.js",
@@ -48,6 +48,7 @@
     "@types/xml2js": "^0.4.2",
     "@types/xmlrpc": "^1.3.2",
     "travis-cli": "^1.0.9",
+    "ts-node": "^7.0.1",
     "typescript": "3.0.1"
   }
 }
