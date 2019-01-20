@@ -1,8 +1,8 @@
 /// <reference path="preferences.d.ts" />
 
 import {XMLRPCConfluenceService} from "./confluence-xmlrpc";
-import {SiteProcessor, Element, ElementAttributes} from "./confluence-site";
-import {rxConfig, ConfigAndCredentials} from "./config";
+import {SiteProcessor, Element} from "./confluence-site";
+import {rxConfig} from "./config";
 
 import * as URL from "url";
 import * as path from "path";
@@ -13,10 +13,9 @@ import * as chalk from "chalk";
 import request = require("request");
 
 import minimist     = require("minimist");
-import Preferences  = require("preferences");
 
-import { Observable, Observer, throwError, of, from, bindNodeCallback, empty, concat,combineLatest } from 'rxjs';
-import { flatMap, map, tap, concatMap, filter, reduce } from 'rxjs/operators';
+import { Observable, Observer, of, from, bindNodeCallback, combineLatest } from 'rxjs';
+import { flatMap, map, tap, filter, reduce } from 'rxjs/operators';
 
 interface Figlet {
   ( input:string, font:string|undefined, callback:(err:any, res:string) => void  ):void;
@@ -49,12 +48,12 @@ export function deploy() {
     .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
     //.map( (logo) => args['config'] || false )
     //.doOnNext( (v) => console.log( "force config", v, args))
-    .pipe( flatMap( (logo) => rxConfig(args['config'] || false ) ))
+    .pipe( flatMap( () => rxConfig(args['config'] || false ) ))
     .pipe( flatMap( ([config,credentials]) => rxConfluenceConnection( config, credentials  ) ))
     .pipe( flatMap( ([confluence,config]) => rxGenerateSite( config, confluence ) ))
     .subscribe(
       //(result) => console.dir( result, {depth:2} ),
-      (result) => {},
+      () => {},
       (err) => console.error( chalk.red(err) )
     );
 
@@ -65,7 +64,7 @@ export function init() {
     .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
     .pipe( flatMap( () => rxConfig( true, args['serverid']) ))
     .subscribe(
-      (value)=> {},
+      ()=> {},
       (err)=> console.error( chalk.red(err) )
     );
 
@@ -76,7 +75,7 @@ export function info() {
     .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
     .pipe( flatMap( () => rxConfig( false ) ))
     .subscribe(
-      (value)=> {},
+      ()=> {},
       (err)=> console.error( chalk.red(err) )
     );
 
@@ -85,7 +84,7 @@ export function info() {
 export function remove() {
     rxFiglet( LOGO, undefined )
     .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-    .pipe( flatMap( v => rxConfig(false) ))
+    .pipe( flatMap( () => rxConfig(false) ))
     .pipe( flatMap( (result) => rxConfluenceConnection( result[0], result[1]  ) ))
     .pipe( flatMap( (result) => rxDelete( result[0], result[1] ) ))
     .subscribe(
@@ -192,7 +191,7 @@ function clrscr() {
  */
 function usageCommand( cmd:string, desc:string, ...args: string[]) {
   desc = chalk.italic.gray(desc);
-  return args.reduce( (previousValue, currentValue, currentIndex, array)=> {
+  return args.reduce( (previousValue, currentValue)=> {
     return util.format( "%s %s", previousValue, chalk.yellow(currentValue) );
   }, "\n\n" + cmd ) + desc;
 }
@@ -301,13 +300,13 @@ function rxDelete( confluence:XMLRPCConfluenceService, config:Config  ):Observab
                                         .pipe( flatMap( (page:Model.PageSummary) => 
                                                 from(confluence.removePageById( page.id as string))
                                                 .pipe( tap( r => console.log( "page:", page.title, "removed!", r )) )
-                                                .pipe( map( r => 1))
+                                                .pipe( map( () => 1))
                                                 ))
-                                        .pipe( reduce( ( acc, x ) => ++acc, 0 ))
+                                        .pipe( reduce( ( acc ) => ++acc, 0 ))
                                         .pipe( flatMap( n => 
                                               from(confluence.removePageById(home.id as string) )
                                                               .pipe( tap( (r) => console.log( "page:", home.title, "removed!", r )))
-                                                              .pipe( map( (value) => ++n ) )
+                                                              .pipe( map( () => ++n ) )
                                         ))
                           ))
                         ;

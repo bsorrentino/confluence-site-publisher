@@ -1,3 +1,6 @@
+/// <reference path="confluence.d.ts" />
+/// <reference path="preferences.d.ts" />
+
 import * as fs from "fs";
 import * as path from "path";
 import * as url from "url";
@@ -90,20 +93,32 @@ namespace ConfigUtils {
 
 }
 
+function version():[string,string] {
+    try {
+        const pkg = require( path.join(__dirname,'..', 'package.json') );
+        return ["version:\t", pkg.version] 
+    }
+    catch( e ) {
+        return ['',''];
+    }
+}
+
 function printConfig( value:ConfigAndCredentials) {
+
     let [cfg, crd] = value ;
 
     let out = [
-
+         version(),
          ["site path:\t",                    cfg.sitePath],
          ["confluence url:\t",               ConfigUtils.Url.format(cfg)],
          ["confluence space id:",            cfg.spaceId],
          ["confluence parent page:",         cfg.parentPageTitle],
-         ["serverid:\t",                       cfg.serverId],
+         ["serverid:\t",                     String(cfg.serverId)],
          ["confluence username:",            crd.username],
          ["confluence password:",            ConfigUtils.maskPassword(crd.password)]
 
-    ].reduce( (prev, curr, index, array ) => {
+    ]
+    .reduce( (prev, curr, index, array ) => {
         let [label,value] = curr;
         return util.format("%s%s\t%s\n", prev, chalk.cyan(label as string), chalk.yellow(value as string) );
     }, "\n\n")
@@ -140,9 +155,13 @@ export function rxConfig( force:boolean, serverId?:string ):Observable<ConfigAnd
     if( fs.existsSync( configPath ) ) {
 
         //console.log( configPath, "found!" );
-
+        
         defaultConfig = require( path.join( process.cwd(), CONFIG_FILE) );
 
+        if( force && !util.isNullOrUndefined(serverId) ) {
+            defaultConfig.serverId = serverId;
+        }
+        
         if( util.isNullOrUndefined(defaultConfig.serverId) ) {
             return throwError( new Error("'serverId' is not defined!"));
         }
