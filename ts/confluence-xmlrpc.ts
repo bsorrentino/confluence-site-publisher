@@ -1,5 +1,6 @@
 /// <reference path="confluence.d.ts" />
 
+import * as util from 'util';
 import * as xmlrpc from 'xmlrpc';
 
 interface ServerInfo {
@@ -197,7 +198,7 @@ export class XMLRPCConfluenceService/*Impl*/ implements ConfluenceService {
           }
         }
 
-        return Promise.reject( "page not found!");
+        return Promise.reject( util.format('page "%s" not found!', title )) ;
     });
   }
 
@@ -226,18 +227,21 @@ export class XMLRPCConfluenceService/*Impl*/ implements ConfluenceService {
 
   getOrCreatePage2( parentPage:Model.Page , title:string  ):Promise<Model.Page>
   {
-    return this.getPageByTitle(parentPage.id as string, title)
+    const p:Page = {
+      space:parentPage.space,
+      parentId:parentPage.id,
+      title:title
+    };
+
+  return this.getPageByTitle(parentPage.id as string, title)
     .then( (result:PageSummary) => {
       if( result != null )
         return this.connection.getPageById(result.id as string);
 
-      let p:Page = {
-        space:parentPage.space,
-        parentId:parentPage.id,
-        title:title
-      };
-
       return Promise.resolve(p);
+    })
+    .catch( (e) => {
+      return this.storePage( p );
     })
     ;
 

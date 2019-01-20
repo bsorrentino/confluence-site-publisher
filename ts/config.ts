@@ -1,3 +1,6 @@
+/// <reference path="confluence.d.ts" />
+/// <reference path="preferences.d.ts" />
+
 import * as fs from "fs";
 import * as path from "path";
 import * as url from "url";
@@ -6,8 +9,10 @@ import * as assert from "assert";
 import * as chalk from "chalk";
 import * as inquirer from "inquirer";
 
-import Rx = require("rx");
 import Preferences = require("preferences");
+
+import { Observable, Observer, throwError, of, from } from 'rxjs';
+import { flatMap, map, tap } from 'rxjs/operators';
 
 export type ConfigAndCredentials = [Config,Credentials];
 
@@ -88,20 +93,32 @@ namespace ConfigUtils {
 
 }
 
+function version():[string,string] {
+    try {
+        const pkg = require( path.join(__dirname,'..', 'package.json') );
+        return ["version:\t", pkg.version] 
+    }
+    catch( e ) {
+        return ['',''];
+    }
+}
+
 function printConfig( value:ConfigAndCredentials) {
+
     let [cfg, crd] = value ;
 
     let out = [
-
+         version(),
          ["site path:\t",                    cfg.sitePath],
          ["confluence url:\t",               ConfigUtils.Url.format(cfg)],
          ["confluence space id:",            cfg.spaceId],
          ["confluence parent page:",         cfg.parentPageTitle],
-         ["serverid:\t",                       cfg.serverId],
+         ["serverid:\t",                     String(cfg.serverId)],
          ["confluence username:",            crd.username],
          ["confluence password:",            ConfigUtils.maskPassword(crd.password)]
 
-    ].reduce( (prev, curr, index, array ) => {
+    ]
+    .reduce( (prev, curr, index, array ) => {
         let [label,value] = curr;
         return util.format("%s%s\t%s\n", prev, chalk.cyan(label as string), chalk.yellow(value as string) );
     }, "\n\n")
@@ -112,7 +129,7 @@ function printConfig( value:ConfigAndCredentials) {
 /**
  *
  */
-export function rxConfig( force:boolean, serverId?:string ):Rx.Observable<ConfigAndCredentials> {
+export function rxConfig( force:boolean, serverId?:string ):Observable<ConfigAndCredentials> {
 
     let configPath = path.join(process.cwd(), CONFIG_FILE);
 
@@ -138,11 +155,15 @@ export function rxConfig( force:boolean, serverId?:string ):Rx.Observable<Config
     if( fs.existsSync( configPath ) ) {
 
         //console.log( configPath, "found!" );
-
+        
         defaultConfig = require( path.join( process.cwd(), CONFIG_FILE) );
 
+        if( force && !util.isNullOrUndefined(serverId) ) {
+            defaultConfig.serverId = serverId;
+        }
+        
         if( util.isNullOrUndefined(defaultConfig.serverId) ) {
-            return Rx.Observable.throw<ConfigAndCredentials>( new Error("'serverId' is not defined!"));
+            return throwError( new Error("'serverId' is not defined!"));
         }
 
         defaultCredentials = new Preferences( defaultConfig.serverId, defaultCredentials) ;
@@ -151,14 +172,14 @@ export function rxConfig( force:boolean, serverId?:string ):Rx.Observable<Config
 
             let data:ConfigAndCredentials = [ defaultConfig, defaultCredentials ];
 
-            return Rx.Observable.just(data)
-                    .do( printConfig );
+            return of(data)
+                    .pipe(tap( printConfig ));
         }
     }
     else {
 
         if( util.isNullOrUndefined(defaultConfig.serverId)  ) {
-            return Rx.Observable.throw<ConfigAndCredentials>( new Error("'serverId' is not defined!"));
+            return throwError( new Error("'serverId' is not defined!"));
         }
         
     }
@@ -210,20 +231,20 @@ export function rxConfig( force:boolean, serverId?:string ):Rx.Observable<Config
 
         ] );
 
-    function  rxCreateConfigFile<T>( path:string, data:any, onSuccessReturn:T):Rx.Observable<T> {
-        return Rx.Observable.create( (observer) => 
+    function  rxCreateConfigFile<T>( path:string, data:any, onSuccessReturn:T):Observable<T> {
+        return Observable.create( (observer:Observer<T>) => 
             fs.writeFile( path, data, (err) => {
                 if( err ) {
-                    observer.onError(err);
+                    observer.error(err);
                     return;
                 }
-                observer.onNext( onSuccessReturn );
-                observer.onCompleted();
+                observer.next( onSuccessReturn );
+                observer.complete();
             })
         );
     } 
-    return Rx.Observable.fromPromise( answers )
-                    .map( (answers:any) => {
+    return from( answers )
+                    .pipe(map( (answers:any) => {
                         let p = url.parse(answers['url']);
                         //console.log( p );
                         let config:Config = {
@@ -247,10 +268,10 @@ export function rxConfig( force:boolean, serverId?:string ):Rx.Observable<Config
                         c.password = answers['password'];
 
                         return [ config, c ] as ConfigAndCredentials;
-                    })
-                    .flatMap( result =>
+                    }))
+                    .pipe(flatMap( result =>
                         rxCreateConfigFile( configPath, JSON.stringify(result[0]), result )
-                    );
+                    ));
 
 }
 
