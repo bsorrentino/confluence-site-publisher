@@ -75,10 +75,6 @@ interface ConfluenceService {
 
     getAttachment?( pageId:string, name:string, version:string ):Promise<Model.Attachment>;
 
-    getOrCreatePage( spaceKey:string , parentPageTitle:string , title:string  ):Promise<Model.Page>;
-
-    getOrCreatePage2( parentPage:Model.Page , title:string  ):Promise<Model.Page>;
-
     removePage( parentPage:Model.Page , title:string  ):Promise<boolean>;
 
     removePageById( pageId:string  ):Promise<boolean>;

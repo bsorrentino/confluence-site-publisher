@@ -218,35 +218,6 @@ export class XMLRPCConfluenceService/*Impl*/ implements ConfluenceService {
     return Promise.reject("getAttachment not implemented yet");
   }
 
-  getOrCreatePage( spaceKey:string , parentPageTitle:string , title:string  ):Promise<Model.Page>
-  {
-    return this.connection.getPage(spaceKey, parentPageTitle)
-    .then( (parentPage:Page) => this.getOrCreatePage2(parentPage, title) )
-    ;
-  }
-
-  getOrCreatePage2( parentPage:Model.Page , title:string  ):Promise<Model.Page>
-  {
-    const p:Page = {
-      space:parentPage.space,
-      parentId:parentPage.id,
-      title:title
-    };
-
-  return this.getPageByTitle(parentPage.id as string, title)
-    .then( (result:PageSummary) => {
-      if( result != null )
-        return this.connection.getPageById(result.id as string);
-
-      return Promise.resolve(p);
-    })
-    .catch( (e) => {
-      return this.storePage( p );
-    })
-    ;
-
-  }
-
   removePage( parentPage:Model.Page , title:string  ):Promise<boolean>
   {
     return Promise.reject("removePage not implemented yet");;

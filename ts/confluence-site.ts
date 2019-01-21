@@ -109,7 +109,35 @@ export class SiteProcessor {
 
     } 
 
-    /**
+    private getOrCreatePage( spaceKey:string , parentPageTitle:string , title:string  ):Promise<Model.Page>
+    {
+      return this.confluence.getPage(spaceKey, parentPageTitle)
+      .then( (parentPage:Model.Page) => this.getOrCreatePageFromParent(parentPage, title) )
+      ;
+    }
+  
+    private getOrCreatePageFromParent( parentPage:Model.Page , title:string  ):Promise<Model.Page>
+    {
+      const p:Model.Page = {
+        space:parentPage.space,
+        parentId:parentPage.id,
+        title:title
+      };
+  
+    return this.confluence.getPageByTitle(parentPage.id as string, title)
+      .then( (result:Model.PageSummary) => {
+        if( result != null )
+          return this.confluence.getPageById(result.id as string);
+  
+        return Promise.resolve(p);
+      })
+      .catch( (e) => {
+        return this.confluence.storePage( p );
+      })
+      ;
+  
+    }
+      /**
      * 
      */
     rxCreatePage( ctx:PageContext ) {
@@ -117,8 +145,8 @@ export class SiteProcessor {
 
         let getOrCreatePage = 
             ( !ctx.parent ) ? 
-                    from(confluence.getOrCreatePage( this.spaceId, this.parentTitle, ctx.meta.$.name as string )) :
-                    from(confluence.getOrCreatePage2( ctx.parent, ctx.meta.$.name as string ))
+                    from(this.getOrCreatePage( this.spaceId, this.parentTitle, ctx.meta.$.name as string )) :
+                    from(this.getOrCreatePageFromParent( ctx.parent, ctx.meta.$.name as string ))
                     ;
         return getOrCreatePage
                 .pipe( tap( (page) => console.log( "creating page:", page.title )) )
