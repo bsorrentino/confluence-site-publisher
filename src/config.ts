@@ -1,4 +1,3 @@
-/// <reference path="confluence.d.ts" />
 /// <reference path="preferences.d.ts" />
 
 import * as fs from "fs";
@@ -13,6 +12,7 @@ import Preferences = require("preferences");
 
 import { Observable, Observer, throwError, of, from } from 'rxjs';
 import { flatMap, map, tap } from 'rxjs/operators';
+import { Config, Credentials } from "./confluence";
 
 export type ConfigAndCredentials = [Config,Credentials];
 
@@ -273,6 +273,22 @@ export function rxConfig( force:boolean, serverId?:string ):Observable<ConfigAnd
                         rxCreateConfigFile( configPath, JSON.stringify(result[0]), result )
                     ));
 
+}
+
+export function normalizePath( path:string|url.UrlObject ):string|url.UrlObject {
+
+    if( util.isString(path) ) {
+        let v = path as string;
+        return v.replace( /\/+/g, '/').replace(/\/+$/, '');
+    }
+    if( util.isObject(path) ) {
+        let v = path as url.UrlObject;
+        if( v.pathname ) {
+            v.pathname = v.pathname.replace( /\/+/g, '/').replace(/\/$/, '');
+            return v;
+        }
+    }
+    throw new Error("input parameter is invalid!"); 
 }
 
 

@@ -1,9 +1,12 @@
+/// <reference types="node" />
+/// <reference path="confluence-model.d.ts" />
+
+import {UrlObject} from 'url';
 
 declare const enum Representation {
   STORAGE=0 , WIKI=1
 }
 
-type ServiceProtocol = "http:"|"https:";
 
 interface BaseConfig {
   protocol:string, // ServiceProtocol
@@ -37,29 +40,6 @@ interface Credentials {
   password:string;
 }
 
-declare module Model {
-
-  export interface Attachment {
-    id?:string;
-    fileName:string;
-    contentType:string;
-    comment:string;
-    created?:Date;
-  }
-
-  export interface PageSummary {
-    id?:string;
-    title:string;
-    space:string;
-    parentId:any;
-  }
-
-  export interface Page extends PageSummary {
-    version?:number;
-    content?:string;
-  }
-
-}
 
 interface ConfluenceService {
 

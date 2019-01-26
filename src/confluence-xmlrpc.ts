@@ -1,4 +1,4 @@
-/// <reference path="confluence.d.ts" />
+import {BaseConfig, Credentials, ConfluenceService, ContentStorage} from './confluence'
 
 import * as util from 'util';
 import * as xmlrpc from 'xmlrpc';
@@ -42,7 +42,7 @@ class Confluence {
 
   constructor( config:BaseConfig, public servicePrefix:string = "confluence1." ) {
     config.path += '/rpc/xmlrpc';
-    //let data = Object.assign( info, {path: '/rpc/xmlrpc'});
+    
     this.client = ( config.protocol === "https:") ? 
         xmlrpc.createSecureClient(config) :
         xmlrpc.createClient(config);
