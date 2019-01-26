@@ -3,6 +3,63 @@ import * as url from 'url';
 import { normalizePath } from "../config";
 import { BaseConfig } from '../confluence';
 
+import * as util from 'util';
+import * as fs from "fs";
+import * as path from "path";
+import * as xml from "xml2js";
+import {markdown2wiki} from "../md";
+
+describe( 'MARKDOWN TEST', () => {
+
+
+    const readFile = util.promisify( fs.readFile );
+
+    test( 'markdown test 1', async () => {
+        expect.assertions(1);
+
+        let file = path.join( process.cwd(), "site", "demo1.md" );
+
+        const buff = await readFile( file );
+    
+        expect( buff ).not.toBeNull();
+
+        console.log( markdown2wiki( buff ) );
+    
+    })
+
+    test( "readme2confluenceTest", async () => {
+        expect.assertions(1);
+
+        let file = path.join( process.cwd(), "README.md" );
+    
+        const buff = await readFile( file );
+    
+        expect( buff ).not.toBeNull();
+
+        console.log( markdown2wiki( buff ) );
+    
+    })
+
+
+    test( "xmlParse()", async ( done ) => {
+        let parser = new xml.Parser();
+        let file = path.join( process.cwd(), "site", "site.xml" );
+    
+        
+        const buff = await readFile( file );
+    
+        expect( buff ).not.toBeNull();
+     
+        parser.parseString(buff.toString(), (err:any, result:any) => {
+            
+                console.dir( result, { depth: 4 } );
+                done();
+        });
+    
+    })
+    
+
+})
 
 describe( "URL TEST", () => {
 
