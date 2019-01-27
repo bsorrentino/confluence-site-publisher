@@ -11,18 +11,6 @@ import {  BaseConfig, Credentials, ConfluenceService, ContentStorage, Representa
 import { Stream, Readable } from 'stream';
 
 
-
-
-interface ServerInfo {
-  patchLevel:boolean,
-  baseUrl: string,
-  minorVersion: number,
-  buildId: number,
-  majorVersion: number,
-  developmentBuild: boolean
-}
-
-
 interface Ancestor {
   id:string;
 }
@@ -255,17 +243,6 @@ class Confluence {
     return this._GET( `${this.baseUrl}/content/${id}?expand=${EXPAND}` );
   }
 
-  getServerInfo():Promise<ServerInfo>  {
-    return Promise.resolve( {
-      patchLevel:false,
-      baseUrl: '',
-      minorVersion: 0,
-      buildId: 0,
-      majorVersion: 0,
-      developmentBuild: false
-    });
-  }
-
   getPage( spaceKey:string, pageTitle:string):Promise<Page> {
 
     return this._findPages( spaceKey, pageTitle ).then( res => {
@@ -490,7 +467,10 @@ export class RESTConfluenceService/*Impl*/ implements ConfluenceService {
         throw "content argument is null!";
     }
 
+
     let p:UpdatePageInput = model2Page(page);
+
+    p.version.number = Number(page.version) + 1;
 
     p.body = {
       storage: {
@@ -550,7 +530,7 @@ async function main() {
           title: 'Home',
           parentId: getPageRes.id,
           space: getPageRes.space,
-          version: 1
+          //version: 1
         });
     
   console.log( "CREATEPAGE RESPONSE\n", addPageRes);
@@ -564,7 +544,19 @@ async function main() {
   },() => fs.createReadStream( path.join( __dirname, '..', 'site', 'Notation Guide.pdf') ))
 
   console.log( "ADDATTACHMENT RESPONSE\n", addPageRes);
-  console.dir(addAttRes, { depth: 5 })
+  console.dir(addAttRes, { depth: 5 });
+
+  let storePageRes = await c.storePageContent( addPageRes, {
+    representation: Representation.WIKI,
+    value: 'h1. HELLO WORLD!'
+  })
+
+  await c.storePageContent( storePageRes, {
+    representation: Representation.WIKI,
+    value: 'h1. HELLO WORLD 2!'
+  })
+
+
 }
 catch( e ) {
   console.error( "ERROR\n", e );
