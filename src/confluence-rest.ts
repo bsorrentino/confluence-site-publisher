@@ -5,7 +5,8 @@ import * as url from 'url';
 import request = require('request');
 
 import { normalizePath } from './config';
-import {  BaseConfig, Credentials, ConfluenceService, ContentStorage } from './confluence';
+import {  BaseConfig, Credentials, ConfluenceService, ContentStorage, Representation } from './confluence';
+
 
 
 interface ServerInfo {
@@ -17,21 +18,53 @@ interface ServerInfo {
   developmentBuild: boolean
 }
 
-interface PageSummary extends Model.PageSummary {
-    url?:string;
-    version?:number;
-    permissions?:string;
+
+interface Ancestor {
+  id:string;
 }
 
-interface Page extends PageSummary, Model.Page {
-    current?:boolean;
-    content?:string;
-    modifier?:string;
-    homePage?:boolean;
-    creator?:string;
-    contentStatus?:string;
-    modified?: Date;
-    created?: Date;
+interface Container {
+  id?:string,
+  name?:string,
+  key:string;
+}
+
+interface Space extends Container {
+  
+}
+interface Version {
+  number:number;
+}
+
+interface PageBody {
+  storage: {
+    representation:Representation,
+    value:any
+  }
+}
+
+interface Page  {
+  id?: string;
+  version: Version;
+  type: string;
+  title: string;
+  space: Space;
+  container?: Container;
+  
+
+}
+
+interface CreatePageInput extends Page {
+  ancestors: Array<Ancestor>;
+}
+
+interface UpdatePageInput extends Page {
+  body?: PageBody;
+}
+
+interface PageLabel {
+  prefix: 'global';
+  name: string;
 }
 
 interface Attachment extends Model.Attachment {
@@ -42,6 +75,79 @@ interface Attachment extends Model.Attachment {
 
 const EXPAND = 'space,version,container';
 
+function page2Model<T extends Model.Page>( p:Page):T {
+  return {
+    id: p.id, 
+    title: p.title, 
+    version: p.version.number, 
+    space: p.space.key,
+    parentId: ( p.container || { id:null }).id
+  } as T;
+} 
+
+function model2Page<T extends Model.Page, P extends Page>( p:T ):P {
+  return {
+    id: p.id, 
+    title: p.title, 
+    version: { number: p.version }, 
+    space: { key: p.space },
+    type: 'page'
+  } as P;
+} 
+
+function _POST_PUT( method:string, auth:request.AuthOptions, serviceUrl:string, inputBody:any ):Promise<request.ResponseAsJSON> 
+{
+
+    return new Promise( ( resolve, reject ) => {
+      request( 
+        serviceUrl, 
+        {
+          method: method,
+          auth: auth, json:true, 
+          body: inputBody,
+          headers: {
+            'content-type': 'application/json',
+          }
+        },
+        ( err, res, body ) => {
+          if( err ) return reject( err );
+
+          if( res.statusCode != 200 ) { 
+            let err:any = new Error( `statusCode:${res.statusCode} ${res.statusMessage}`);
+            err.code = res.statusCode;
+            err.body = body;
+            return reject( err) ;
+          }
+           
+          resolve( res.toJSON() );
+        });
+      });
+  }
+
+  function _GET_DELETE( method:string, auth:request.AuthOptions, serviceUrl:string ):Promise<request.ResponseAsJSON> 
+  {
+
+    return new Promise( ( resolve, reject ) => {
+      request( 
+        serviceUrl, 
+        {
+          method: method,
+          auth: auth, json:true 
+        },
+        ( err, res, body ) => {
+          if( err ) return reject( err );
+
+          if( res.statusCode >= 400 ) { 
+            let err:any = new Error( `statusCode:${res.statusCode} ${res.statusMessage}`);
+            err.code = res.statusCode;
+            err.body = body;
+            return reject( err) ;
+          }
+           
+          resolve( res.toJSON() );
+        });
+      });
+  }
 class Confluence {
 
   baseUrl:string;
@@ -63,31 +169,21 @@ class Confluence {
       sendImmediately: true
     }
 
+    this._POST = _POST_PUT.bind( null, "POST", this.auth);
+    this. _PUT = _POST_PUT.bind( null, "PUT", this.auth);
+    this._GET = _GET_DELETE.bind( null, "GET", this.auth);
+    this. _DELETE = _GET_DELETE.bind( null, "DELETE", this.auth);
+
   }
+  
+  private _GET:(( url:string ) => Promise<request.ResponseAsJSON>) ;
+  private _DELETE:(( url:string ) => Promise<request.ResponseAsJSON>) ;
+  private _POST:(( url:string, body:any ) => Promise<request.ResponseAsJSON>) ;
+  private _PUT:(( url:string, body:any ) => Promise<request.ResponseAsJSON>) ;
 
-  _GET( serviceUrl:string ):Promise<request.ResponseAsJSON> 
-  {
-
-    return new Promise( ( resolve, reject ) => {
-      request.get( 
-        serviceUrl, 
-        {
-          auth: this.auth, json:true 
-        },
-        ( err, res, body ) => {
-          if( err ) return reject( err );
-
-          if( res.statusCode != 200 ) { 
-            let err:any = new Error( `statusCode:${res.statusCode} ${res.statusMessage}`);
-            err.code = res.statusCode;
-            err.body = body;
-            return reject( err) ;
-          }
-           
-          resolve( res.toJSON() );
-        });
-      });
-  }
+  ////////////////////////////////////////////////////////////////
+  // CONTENT
+  ////////////////////////////////////////////////////////////////
 
   private _findPages( spaceKey:string, title:string ):Promise<request.ResponseAsJSON> {
     return this._GET( `${this.baseUrl}/content?spaceKey=${spaceKey}&title=${title}&expand=${EXPAND}` );  
@@ -96,16 +192,6 @@ class Confluence {
   private _findPageById( id:string ):Promise<request.ResponseAsJSON> {
     return this._GET( `${this.baseUrl}/content/${id}?expand=${EXPAND}` );
   }
-
-  private _childrenPages( id:string ):Promise<request.ResponseAsJSON> {
-    return this._GET( `${this.baseUrl}/content/${id}/child/page?expand=${EXPAND}` );  
-  }
-
-  private _descendantPages( id:string ):Promise<request.ResponseAsJSON> {
-    //return this._GET( `${this.baseUrl}/content/${id}/descendant/page?expand=${EXPAND}` );  
-    return this._GET( `${this.baseUrl}/content/${id}/child/page?expand=${EXPAND}` );  
-  }
-  
 
   getServerInfo():Promise<ServerInfo>  {
     return Promise.resolve( {
@@ -141,34 +227,47 @@ class Confluence {
     });
    }
 
-  getChildren(pageId:string):Promise<Array<PageSummary>> {
-    return this._childrenPages( pageId ).then( res => {
+  getChildren(id:string):Promise<Array<Page>> {
+
+    return this._GET( `${this.baseUrl}/content/${id}/child/page?expand=${EXPAND}` ).then( res => {
       
       if( util.isUndefined(res.body.results) || !util.isArray(res.body.results) ) return Promise.reject( "invalid result");
       if( res.body.results.length==0 ) return Promise.reject( "result is empty");
 
-      return Promise.resolve(res.body.results as Array<PageSummary>);
+      return Promise.resolve(res.body.results as Array<Page>);
 
     });
   }
 
-  getDescendents(pageId:string):Promise<Array<PageSummary>> {
-    return this._descendantPages( pageId ).then( res => {
+  getDescendents(id:string):Promise<Array<Page>> {
+    return this._GET( `${this.baseUrl}/content/${id}/child/page?expand=${EXPAND}` ).then( res => {
       
       if( util.isUndefined(res.body.results) || !util.isArray(res.body.results) ) return Promise.reject( "invalid result");
       if( res.body.results.length==0 ) return Promise.reject( "result is empty");
 
-      return Promise.resolve(res.body.results as Array<PageSummary>);
+      return Promise.resolve(res.body.results as Array<Page>);
 
     });
   }
 
-  storePage(page:Page):Promise<Page>  {
-    return Promise.reject( 'not implemented yet!');
+  addPage(input:CreatePageInput):Promise<Page>  {
+
+    return this._POST( `${this.baseUrl}/content`, input ).then( res => {
+      return res.body as Page;
+    })
   }
 
-  removePage(pageId:string):Promise<boolean> {
-    return Promise.reject( 'not implemented yet!');
+  updatePage(input:UpdatePageInput):Promise<Page>  {
+
+    return this._PUT( `${this.baseUrl}/content/${input.id}`, input ).then( res => {
+      return res.body as Page;
+    })
+  }
+
+  removePage(id:string):Promise<Page> {
+    return this._DELETE( `${this.baseUrl}/content/${id}` ).then( res => {
+      return res.body as Page;
+    })
   }
 
   addAttachment(parentId:string, attachment:Attachment, data:Buffer):Promise<Attachment>   {
@@ -178,13 +277,18 @@ class Confluence {
   /**
    * Adds a label to the object with the given ContentEntityObject ID.
    */
-  addLabelByName(page:Model.Page, labelName:string):Promise<boolean> {
-    return Promise.reject( 'not implemented yet!');
+  addLabelByName(page:Model.Page, ...labels: string[]):Promise<boolean> {
+
+    let input:Array<PageLabel> = labels.map( l => { return { prefix:'global', name:l } as PageLabel});
+
+    return this._POST( `${this.baseUrl}/content/${page.id}/label`, input  ).then( res => true) ;
+
   }
 
 }
 
 export class RESTConfluenceService/*Impl*/ implements ConfluenceService {
+
 
   static  create( config:BaseConfig, credentials:Credentials /*, ConfluenceProxy proxyInfo, SSLCertificateInfo sslInfo*/ ):Promise<RESTConfluenceService> {
       if( config == null ) throw "config argument is null!";
@@ -209,7 +313,7 @@ export class RESTConfluenceService/*Impl*/ implements ConfluenceService {
 
   getPage( spaceKey:string, pageTitle:string ):Promise<Model.Page>
   {
-    return this.connection.getPage(spaceKey,pageTitle);
+    return this.connection.getPage(spaceKey,pageTitle).then( page2Model );
   }
 
   getPageByTitle( parentPageId:string, title:string):Promise<Model.PageSummary>
@@ -218,11 +322,11 @@ export class RESTConfluenceService/*Impl*/ implements ConfluenceService {
     if( title == null ) throw "title argument is null!";
 
     return this.connection.getChildren(parentPageId)
-    .then( (children:Array<PageSummary>) => {
+    .then( (children) => {
 
         for( let i = 0 ; i<children.length; ++i ) {
           if( title === children[i].title ) {
-            return Promise.resolve( children[i] );
+            return Promise.resolve( page2Model(children[i]) );
           }
         }
 
@@ -233,17 +337,17 @@ export class RESTConfluenceService/*Impl*/ implements ConfluenceService {
   getPageById( pageId:string ):Promise<Model.Page>
   {
     if( pageId == null ) throw "pageId argument is null!";
-    return this.connection.getPageById( pageId );
+    return this.connection.getPageById( pageId ).then( page2Model );
   }
 
   getDescendents(pageId:string):Promise<Array<Model.PageSummary>>
   {
-    return this.connection.getDescendents( pageId );
+    return this.connection.getDescendents( pageId ).then( p => p.map( page2Model ));
   }
 
-  getAttachment?( pageId:string, name:string, version:string ):Promise<Model.Attachment>
+  removePageById( pageId:string  ):Promise<boolean>
   {
-    return Promise.reject("getAttachment not implemented yet");
+    return this.connection.removePage( pageId ).then( p => { return true; } );
   }
 
   removePage( parentPage:Model.Page , title:string  ):Promise<boolean>
@@ -251,14 +355,14 @@ export class RESTConfluenceService/*Impl*/ implements ConfluenceService {
     return Promise.reject("removePage not implemented yet");;
   }
 
-  removePageById( pageId:string  ):Promise<boolean>
+  addLabelsByName( page:Model.Page, ...labels: string[]  ):Promise<boolean>
   {
-    return this.connection.removePage( pageId );
+    return this.connection.addLabelByName(page, ...labels);
   }
 
-  addLabelByName( page:Model.Page, label:string  ):Promise<boolean>
+  getAttachment?( pageId:string, name:string, version:string ):Promise<Model.Attachment>
   {
-    return this.connection.addLabelByName(page,label);
+    return Promise.reject("getAttachment not implemented yet");
   }
 
   addAttachment( page:Model.Page, attachment:Model.Attachment, content:Buffer ):Promise<Model.Attachment>
@@ -266,41 +370,54 @@ export class RESTConfluenceService/*Impl*/ implements ConfluenceService {
     return this.connection.addAttachment( page.id as string, attachment, content) ;
   }
 
+  /**
+   * update content
+   * 
+   * @param page 
+   * @param content 
+   */
   storePageContent( page:Model.Page, content:ContentStorage  ):Promise<Model.Page>
   {
     if( content == null ) {
         throw "content argument is null!";
     }
 
-    let p = page as Page;
-    p.content = content.value;
+    let p:UpdatePageInput = model2Page(page);
 
-    return this.connection.storePage(p);
+    p.body = {
+      storage: {
+        representation: content.representation,
+        value: content.value
+      }
+    } 
+
+    return this.connection.updatePage(p).then( page2Model );
   }
 
-  storePage( page:Model.Page ):Promise<Model.Page>
+  /**
+   * add new page
+   * 
+   * @param page 
+   * 
+   */
+  addPage( page:Model.Page ):Promise<Model.Page>
   {
-    let p = page as Page;
+    let p:CreatePageInput  = model2Page( page );
 
-    return this.connection.storePage(p);
+    p.ancestors = [ { id:page.parentId }];
+
+    return this.connection.addPage(p).then( page2Model );
   }
 
-  /*
-  call( task:(ConfluenceService) => void ) {
-    this.connection.login( this.credentials.username, this.credentials.password )
-      .then( (token) => {
-          console.log( "session started!");
-          task( this );
-          return this.connection.logout();
-      })
-      .then( () => console.log( "session ended!") );
-  }
-  */
+
 }
 
 
-function main() {
-  let c = new Confluence( {
+async function main() {
+
+  try {
+
+  let c = await RESTConfluenceService.create( {
     protocol:'http',
     host:'192.168.0.11',
     port:8090,
@@ -310,34 +427,34 @@ function main() {
     password:'admin'
   } );
 
-  c.getPage( 'TEST', 'Home' ).then( ( res:any ) => {
+  const getHomeRes = await c.getPage( 'TEST', 'Home' );
+  if( getHomeRes && getHomeRes.id ) {
+    const addLabelRes = await c.addLabelsByName( getHomeRes, 'label1', 'label2', 'label3');
+    const delPageRes = await c.removePageById( String(getHomeRes.id) )
+  }
+
+  const getPageRes = await c.getPage( 'TEST', 'TEST' )
     
-    type K1 = keyof Page;
+  console.log( "GETPAGE RESPONSE\n", getPageRes );
 
-    console.log(  
-`
-id:${res.id}
-modified:${res.modified}
-creator:${res.creator}
-permission:${res.permissions}
-space:${res.space.id}
-parentId:${res.parentId}
-title:${res.title}
-url:${res.url}
-version:${res.version.number}
-content:${res.content}
-`
-);
-
-    //return c.getPageById( res.id as string );
-    return c.getChildren( res.id as string );
-  })
-  .then( res => {
-
-    console.log( res )
-
+  
+  const addPageRes = await c.addPage( {
+          title: 'Home',
+          parentId: getPageRes.id,
+          space: getPageRes.space,
+          version: 1
+        });
     
-  })
-  .catch( err => console.error(err) )
+  console.log( "CREATEPAGE RESPONSE\n", addPageRes);
+  
+  const addLabelRes = await c.addLabelsByName( addPageRes, 'label1', 'label2');
+
+
 }
+catch( e ) {
+  console.error( "ERROR\n", e );
+}
+
+}
+
 main();

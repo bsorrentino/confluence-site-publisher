@@ -4,7 +4,7 @@
 import {UrlObject} from 'url';
 
 declare const enum Representation {
-  STORAGE=0 , WIKI=1
+  STORAGE="storage" , WIKI="wiki"
 }
 
 
@@ -59,16 +59,13 @@ interface ConfluenceService {
 
     removePageById( pageId:string  ):Promise<boolean>;
 
-    addLabelByName( page:Model.Page, label:string ):Promise<boolean>;
+    addLabelsByName( page:Model.Page, ...label:string[] ):Promise<boolean>;
 
     addAttachment( page:Model.Page, attachment:Model.Attachment, content:Buffer ):Promise<Model.Attachment>;
 
     storePageContent( page:Model.Page, content:ContentStorage  ):Promise<Model.Page>;
 
-    storePage( page:Model.Page ):Promise<Model.Page>;
-
-    //call?( task:(ConfluenceService) => void );
-
+    addPage( page:Model.Page ):Promise<Model.Page>;
 
 
 }

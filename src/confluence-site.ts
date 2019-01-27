@@ -7,6 +7,7 @@ import { Observable, Observer, throwError, of, from, bindNodeCallback, empty, co
 import { flatMap, map, tap, concatMap } from 'rxjs/operators';
 
 import {markdown2wiki} from "./md";
+import { ConfluenceService, ContentStorage, Representation } from "./confluence";
 
 export interface ElementAttributes {
     name?:string;
@@ -132,7 +133,7 @@ export class SiteProcessor {
         return Promise.resolve(p);
       })
       .catch( (e) => {
-        return this.confluence.storePage( p );
+        return this.confluence.addPage( p );
       })
       ;
   
@@ -159,7 +160,7 @@ export class SiteProcessor {
     private rxProcessLabels( ctx:PageContext ) {
         return from( ctx.meta.label || [])
                     .pipe( flatMap( (data:string) => 
-                        from(this.confluence.addLabelByName( ctx.parent as Model.Page, data )) ) )
+                        from(this.confluence.addLabelsByName( ctx.parent as Model.Page, data )) ) )
                     ;        
     } 
 

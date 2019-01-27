@@ -1,4 +1,3 @@
-/// <reference path="preferences.d.ts" />
 
 import {XMLRPCConfluenceService} from "./confluence-xmlrpc";
 import {SiteProcessor, Element} from "./confluence-site";
@@ -16,6 +15,7 @@ import minimist     = require("minimist");
 
 import { Observable, Observer, of, from, bindNodeCallback, combineLatest } from 'rxjs';
 import { flatMap, map, tap, filter, reduce } from 'rxjs/operators';
+import { Config, Credentials } from "./confluence";
 
 interface Figlet {
   ( input:string, font:string|undefined, callback:(err:any, res:string) => void  ):void;
