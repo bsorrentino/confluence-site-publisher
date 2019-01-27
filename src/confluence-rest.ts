@@ -5,7 +5,7 @@ import * as url from 'url';
 import request = require('request');
 
 import { normalizePath } from './config';
-import { Config, BaseConfig, Credentials } from './confluence';
+import {  BaseConfig, Credentials, ConfluenceService, ContentStorage } from './confluence';
 
 
 interface ServerInfo {
@@ -42,11 +42,13 @@ interface Attachment extends Model.Attachment {
 
 const EXPAND = 'space,version,container';
 
-class ConfluenceREST {
+class Confluence {
 
   baseUrl:string;
 
-  constructor( config:BaseConfig, private credentials:Credentials ) {
+  auth:request.AuthOptions 
+
+  constructor( config:BaseConfig, credentials:Credentials ) {
 
     const cfg:url.UrlObject = {
       protocol: config.protocol,
@@ -54,33 +56,54 @@ class ConfluenceREST {
       port: config.port,
       pathname: config.path
     }
-    this.baseUrl = url.format( normalizePath(config) );
+    this.baseUrl = url.format( normalizePath(cfg) );
+    this.auth = {
+      username: credentials.username,
+      password: credentials.password,
+      sendImmediately: true
+    }
 
   }
 
-  childrenPages( id:string ) {
-
-    let serviceUrl =  util.format( '%s/content/%s/child/page?expand=', this.baseUrl, id, EXPAND );
+  _GET( serviceUrl:string ):Promise<request.ResponseAsJSON> 
+  {
 
     return new Promise( ( resolve, reject ) => {
       request.get( 
         serviceUrl, 
         {
-        auth: {
-          username: this.credentials.username,
-          password: this.credentials.password,
-          sendImmediately: false
-        }
-      },
-      ( err, res, body ) => {
-        if( err ) {
-          return reject( err );
-        }
+          auth: this.auth, json:true 
+        },
+        ( err, res, body ) => {
+          if( err ) return reject( err );
 
-        resolve( { res:res, body:body } );
+          if( res.statusCode != 200 ) { 
+            let err:any = new Error( `statusCode:${res.statusCode} ${res.statusMessage}`);
+            err.code = res.statusCode;
+            err.body = body;
+            return reject( err) ;
+          }
+           
+          resolve( res.toJSON() );
+        });
       });
-    });
-  
+  }
+
+  private _findPages( spaceKey:string, title:string ):Promise<request.ResponseAsJSON> {
+    return this._GET( `${this.baseUrl}/content?spaceKey=${spaceKey}&title=${title}&expand=${EXPAND}` );  
+  }
+
+  private _findPageById( id:string ):Promise<request.ResponseAsJSON> {
+    return this._GET( `${this.baseUrl}/content/${id}?expand=${EXPAND}` );
+  }
+
+  private _childrenPages( id:string ):Promise<request.ResponseAsJSON> {
+    return this._GET( `${this.baseUrl}/content/${id}/child/page?expand=${EXPAND}` );  
+  }
+
+  private _descendantPages( id:string ):Promise<request.ResponseAsJSON> {
+    //return this._GET( `${this.baseUrl}/content/${id}/descendant/page?expand=${EXPAND}` );  
+    return this._GET( `${this.baseUrl}/content/${id}/child/page?expand=${EXPAND}` );  
   }
   
 
@@ -96,101 +119,83 @@ class ConfluenceREST {
   }
 
   getPage( spaceKey:string, pageTitle:string):Promise<Page> {
-    return this.call("getPage", [this.token,spaceKey,pageTitle] );
+
+    return this._findPages( spaceKey, pageTitle ).then( res => {
+      
+      if( util.isUndefined(res.body.results) || !util.isArray(res.body.results) ) return Promise.reject( "invalid result");
+      if( res.body.results.length==0 ) return Promise.reject( "result is empty");
+
+      return Promise.resolve(res.body.results[0] as Page);
+
+    });
   }
 
   getPageById( id:string ):Promise<Page> {
-    return this.call("getPage", [this.token,id] );
-  }
+
+    return this._findPageById( id ).then( res => {
+      
+      if( util.isUndefined(res.body) ) return Promise.reject( "invalid result" );
+
+      return Promise.resolve(res.body as Page);
+
+    });
+   }
 
   getChildren(pageId:string):Promise<Array<PageSummary>> {
-    return this.call("getChildren", [this.token,pageId]);
+    return this._childrenPages( pageId ).then( res => {
+      
+      if( util.isUndefined(res.body.results) || !util.isArray(res.body.results) ) return Promise.reject( "invalid result");
+      if( res.body.results.length==0 ) return Promise.reject( "result is empty");
+
+      return Promise.resolve(res.body.results as Array<PageSummary>);
+
+    });
   }
 
   getDescendents(pageId:string):Promise<Array<PageSummary>> {
-    return this.call("getDescendents", [this.token,pageId] );
+    return this._descendantPages( pageId ).then( res => {
+      
+      if( util.isUndefined(res.body.results) || !util.isArray(res.body.results) ) return Promise.reject( "invalid result");
+      if( res.body.results.length==0 ) return Promise.reject( "result is empty");
+
+      return Promise.resolve(res.body.results as Array<PageSummary>);
+
+    });
   }
 
   storePage(page:Page):Promise<Page>  {
-    return this.call2("confluence1.", "storePage", [this.token,page] );
+    return Promise.reject( 'not implemented yet!');
   }
 
   removePage(pageId:string):Promise<boolean> {
-    return this.call("removePage", [this.token,pageId]);
+    return Promise.reject( 'not implemented yet!');
   }
 
   addAttachment(parentId:string, attachment:Attachment, data:Buffer):Promise<Attachment>   {
-    return this.call("addAttachment", [this.token,parentId, attachment, data]);
+    return Promise.reject( 'not implemented yet!');
   }
 
   /**
    * Adds a label to the object with the given ContentEntityObject ID.
    */
   addLabelByName(page:Model.Page, labelName:string):Promise<boolean> {
-      return this.call("addLabelByName", [this.token,labelName,page.id]);
-  }
-
- 
-  private call<T>( op:string, args:Array<any> ):Promise<T> {
-    return this.call2( this.servicePrefix, op, args );
-  }
-
-  private call2<T>( servicePrefix:string, op:string, args:Array<any> ):Promise<T> {
-    let operation = servicePrefix.concat( op );
-
-    return new Promise<T>( (resolve, reject) => {
-
-      this.client.methodCall(operation, args, (error:any, value:any) => {
-        if (error) {
-            console.log('error:', error);
-            console.log('req headers:', error.req && error.req._header);
-            console.log('res code:', error.res && error.res.statusCode);
-            console.log('res body:', error.body);
-            reject(error);
-          } else {
-            //console.log('value:', value);
-            resolve( value );
-          }
-        });
-    });
-
+    return Promise.reject( 'not implemented yet!');
   }
 
 }
 
 export class RESTConfluenceService/*Impl*/ implements ConfluenceService {
 
-  static  create( config:BaseConfig, credentials:Credentials /*, ConfluenceProxy proxyInfo, SSLCertificateInfo sslInfo*/ ):Promise<XMLRPCConfluenceService> {
+  static  create( config:BaseConfig, credentials:Credentials /*, ConfluenceProxy proxyInfo, SSLCertificateInfo sslInfo*/ ):Promise<RESTConfluenceService> {
       if( config == null ) throw "config argument is null!";
       if( credentials == null ) throw "credentials argument is null!";
       
-      /*
-      if( sslInfo == null ) throw new IllegalArgumentException("sslInfo argument is null!");
 
-      if (!sslInfo.isIgnore() && url.startsWith("https")) {
-          HttpsURLConnection.setDefaultSSLSocketFactory( sslInfo.getSSLSocketFactory());
-          HttpsURLConnection.setDefaultHostnameVerifier( sslInfo.getHostnameVerifier() );
-      }
-      */
+      return new Promise<RESTConfluenceService>( (resolve, reject) => {
 
-      return new Promise<XMLRPCConfluenceService>( (resolve, reject) => {
+        let confluence = new Confluence(config,credentials);
 
-        let confluence = new Confluence(config);
-        confluence.login( credentials.username, credentials.password ).then( (token:string) => {
-
-            return confluence.getServerInfo();
-
-        }).then( (value:ServerInfo) => {
-
-            if( value.majorVersion >= 4 ) {
-              confluence.servicePrefix = "confluence2.";
-            }
-            resolve( new XMLRPCConfluenceService(confluence,credentials) );
-
-        }).catch( (error) => {
-          reject(error);
-        });
-
+        resolve( new RESTConfluenceService(confluence,credentials) );
       });
 
   }
@@ -295,9 +300,9 @@ export class RESTConfluenceService/*Impl*/ implements ConfluenceService {
 
 
 function main() {
-  let c = new ConfluenceREST( {
+  let c = new Confluence( {
     protocol:'http',
-    host:'localhost',
+    host:'192.168.0.11',
     port:8090,
     path:'rest/api'
   }, {
@@ -305,8 +310,34 @@ function main() {
     password:'admin'
   } );
 
-  c.childrenPages( '123456').then( (res) => {
+  c.getPage( 'TEST', 'Home' ).then( ( res:any ) => {
+    
+    type K1 = keyof Page;
+
+    console.log(  
+`
+id:${res.id}
+modified:${res.modified}
+creator:${res.creator}
+permission:${res.permissions}
+space:${res.space.id}
+parentId:${res.parentId}
+title:${res.title}
+url:${res.url}
+version:${res.version.number}
+content:${res.content}
+`
+);
+
+    //return c.getPageById( res.id as string );
+    return c.getChildren( res.id as string );
+  })
+  .then( res => {
+
     console.log( res )
-  }).catch( err => console.error(err) )
+
+    
+  })
+  .catch( err => console.error(err) )
 }
 main();
