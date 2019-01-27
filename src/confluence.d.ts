@@ -2,6 +2,7 @@
 /// <reference path="confluence-model.d.ts" />
 
 import {UrlObject} from 'url';
+import { Stream } from 'stream';
 
 declare const enum Representation {
   STORAGE="storage" , WIKI="wiki"
@@ -61,7 +62,7 @@ interface ConfluenceService {
 
     addLabelsByName( page:Model.Page, ...label:string[] ):Promise<boolean>;
 
-    addAttachment( page:Model.Page, attachment:Model.Attachment, content:Buffer ):Promise<Model.Attachment>;
+    addAttachment( page:Model.Page, attachment:Model.Attachment, content:Buffer|(()=>Stream) ):Promise<Model.Attachment>;
 
     storePageContent( page:Model.Page, content:ContentStorage  ):Promise<Model.Page>;
 

@@ -1,11 +1,15 @@
 
 import * as util from 'util';
 import * as url from 'url';
+import * as fs from 'fs';
+import * as path from 'path';
 
 import request = require('request');
 
 import { normalizePath } from './config';
 import {  BaseConfig, Credentials, ConfluenceService, ContentStorage, Representation } from './confluence';
+import { Stream, Readable } from 'stream';
+
 
 
 
@@ -34,6 +38,8 @@ interface Space extends Container {
 }
 interface Version {
   number:number;
+  minorEdit?: boolean,
+  when?:Date
 }
 
 interface PageBody {
@@ -51,7 +57,6 @@ interface Page  {
   space: Space;
   container?: Container;
   
-
 }
 
 interface CreatePageInput extends Page {
@@ -67,14 +72,61 @@ interface PageLabel {
   name: string;
 }
 
-interface Attachment extends Model.Attachment {
-  creator?:string;
-  fileSize?:number;
-  url?:string;
+interface PageAttachment  extends Page {
+  extensions: { 
+    mediaType: string,
+    fileSize: number,
+    comment: string 
+  },
+
+}
+
+interface CreateAttachmentInput  {
+  comment?:string;
+  minorEdit?:boolean;
+  filename:string;
+  contentType:string;
+  content:() => Stream,
 }
 
 const EXPAND = 'space,version,container';
 
+/**
+ * conver buffer to stream
+ * 
+ * @ref https://stackoverflow.com/a/44091532/521197
+ * 
+ * @param buffer 
+ * 
+ */
+function buffer2Stream( buffer:Buffer ):Stream {  
+  const readable = new Readable()
+  readable._read = () => {} // _read is required but you can noop it
+  readable.push(buffer)
+  readable.push(null)
+
+  return readable;
+}
+
+/**
+ * 
+ */
+function attachment2Model<T extends Model.Attachment>( a:PageAttachment ) {
+
+  return {
+    id: a.id, 
+    fileName: a.title, 
+    comment: a.extensions.comment,
+    contentType: a.extensions.mediaType,
+    created: a.version.when
+  } as T;
+
+}
+
+/**
+ * 
+ * @param p 
+ */
 function page2Model<T extends Model.Page>( p:Page):T {
   return {
     id: p.id, 
@@ -85,6 +137,10 @@ function page2Model<T extends Model.Page>( p:Page):T {
   } as T;
 } 
 
+/**
+ * 
+ * @param p 
+ */
 function model2Page<T extends Model.Page, P extends Page>( p:T ):P {
   return {
     id: p.id, 
@@ -106,8 +162,9 @@ function _POST_PUT( method:string, auth:request.AuthOptions, serviceUrl:string, 
           auth: auth, json:true, 
           body: inputBody,
           headers: {
-            'content-type': 'application/json',
-          }
+            'User-Agent': 'confluence-site-publisher',
+            'X-Atlassian-Token': 'no-check'
+          },
         },
         ( err, res, body ) => {
           if( err ) return reject( err );
@@ -131,6 +188,11 @@ function _POST_PUT( method:string, auth:request.AuthOptions, serviceUrl:string, 
       request( 
         serviceUrl, 
         {
+          headers: {
+            'User-Agent': 'confluence-site-publisher',
+            'X-Atlassian-Token': 'no-check'
+          },
+          
           method: method,
           auth: auth, json:true 
         },
@@ -270,8 +332,47 @@ class Confluence {
     })
   }
 
-  addAttachment(parentId:string, attachment:Attachment, data:Buffer):Promise<Attachment>   {
-    return Promise.reject( 'not implemented yet!');
+  addAttachment(pageId:string, input:CreateAttachmentInput):Promise<PageAttachment>   {
+    return new Promise( ( resolve, reject ) => {
+      request( 
+        `${this.baseUrl}/content/${pageId}/child/attachment`, 
+        {
+          headers: {
+            'User-Agent': 'confluence-site-publisher',
+            'X-Atlassian-Token': 'no-check'
+          },
+          method: 'POST',
+          auth: this.auth, json:true, 
+          formData: {
+            comment: input.comment,
+            minorEdit: String(input.minorEdit),
+            file: {
+              value: input.content(),
+              options: {
+                filename: input.filename,
+                contentType: input.contentType
+              }
+            }
+          },  
+        },
+        ( err, res, body ) => {
+          if( err ) return reject( err );
+
+          if( res.statusCode != 200 ) { 
+            let err:any = new Error( `statusCode:${res.statusCode} ${res.statusMessage}`);
+            err.code = res.statusCode;
+            err.body = body;
+            return reject( err) ;
+          }
+           
+          const result = res.toJSON();
+
+          if( util.isUndefined(result.body.results) || !util.isArray(result.body.results) ) return Promise.reject( "invalid result");
+          if( result.body.results.length==0 ) return Promise.reject( "result is empty");
+    
+          resolve( result.body.results[0] as PageAttachment );
+        });
+      });
   }
 
   /**
@@ -365,9 +466,16 @@ export class RESTConfluenceService/*Impl*/ implements ConfluenceService {
     return Promise.reject("getAttachment not implemented yet");
   }
 
-  addAttachment( page:Model.Page, attachment:Model.Attachment, content:Buffer ):Promise<Model.Attachment>
+  addAttachment( page:Model.Page, attachment:Model.Attachment, content:(()=>Stream) ):Promise<Model.Attachment>
   {
-    return this.connection.addAttachment( page.id as string, attachment, content) ;
+
+    return this.connection.addAttachment( String(page.id), {
+      comment: attachment.comment, 
+      minorEdit: false, 
+      contentType: attachment.contentType, 
+      filename: attachment.fileName, 
+      content: content
+    }).then( attachment2Model )
   }
 
   /**
@@ -449,7 +557,14 @@ async function main() {
   
   const addLabelRes = await c.addLabelsByName( addPageRes, 'label1', 'label2');
 
+  const addAttRes = await c.addAttachment( addPageRes, {
+    comment: "test", 
+    contentType: 'application/pdf', 
+    fileName: 'notation_guide.pdf',
+  },() => fs.createReadStream( path.join( __dirname, '..', 'site', 'Notation Guide.pdf') ))
 
+  console.log( "ADDATTACHMENT RESPONSE\n", addPageRes);
+  console.dir(addAttRes, { depth: 5 })
 }
 catch( e ) {
   console.error( "ERROR\n", e );
