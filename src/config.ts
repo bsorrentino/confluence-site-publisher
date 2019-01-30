@@ -19,6 +19,41 @@ export type ConfigAndCredentials = [Config,Credentials];
 const CONFIG_FILE       = "config.json";
 const SITE_PATH         = "site.xml"
 
+const restMatcher = new RegExp( `(${PathSuffix.REST})$` );
+const xmlrpcMatcher = new RegExp( `(${PathSuffix.XMLRPC})$` );
+
+
+export function normalizePath( path:string|url.UrlObject ):string|url.UrlObject {
+
+    if( util.isString(path) ) {
+        let v = path as string;
+        return v.replace( /\/+/g, '/').replace(/\/+$/, '');
+    }
+    if( util.isObject(path) ) {
+        let v = path as url.UrlObject;
+        if( v.pathname ) {
+            v.pathname = v.pathname.replace( /\/+/g, '/').replace(/\/$/, '');
+            return v;
+        }
+    }
+    throw new Error("input parameter is invalid!"); 
+}
+
+function removeSuffixFromPath( path:string|Config ) {
+    if( util.isString(path) ) {
+        let v = path as string;
+        return v.replace( restMatcher, '' ).replace( xmlrpcMatcher, '');
+    }
+    if( util.isObject(path) ) {
+        let v = path as url.UrlObject;
+        if( v.path ) {
+            v.path = v.path.replace( restMatcher, '' ).replace( xmlrpcMatcher, '');
+            return v;
+        }
+    }
+    throw new Error("input parameter is invalid!"); 
+}
+
 namespace ConfigUtils {
 
     /**
@@ -79,7 +114,7 @@ namespace ConfigUtils {
         export function format( config:Config ):string {
 
                 assert( !util.isNullOrUndefined(config) );
-
+                
                 let port = util.isNull(config.port) ? "" : (config.port===80 ) ? "" : ":" + config.port
                 return util.format( "%s//%s%s%s",
                                 config.protocol,
@@ -214,7 +249,10 @@ export function rxConfig( force:boolean, serverId?:string ):Observable<ConfigAnd
                 type: 'list',
                 name: 'suffix',
                 message: 'Which protocol want to use?',
-                default: () => { },
+                default: () => { 
+                    return ( defaultConfig.path.match(restMatcher) ) ? PathSuffix.REST : PathSuffix.XMLRPC;
+                },
+                //when: () => !( defaultConfig.path.match(restMatcher) || defaultConfig.path.match(xmlrpcMatcher) ),
                 choices: [ 
                     { name:'xmlrpc', value:PathSuffix.XMLRPC}, 
                     { name:'rest', value:PathSuffix.REST }
@@ -252,7 +290,7 @@ export function rxConfig( force:boolean, serverId?:string ):Observable<ConfigAnd
 
         ] );
 
-    function  rxCreateConfigFile<T>( path:string, data:any, onSuccessReturn:T):Observable<T> {
+    const rxCreateConfigFile = <T>( path:string, data:any, onSuccessReturn:T):Observable<T> => {
         return Observable.create( (observer:Observer<T>) => 
             fs.writeFile( path, data, (err) => {
                 if( err ) {
@@ -264,12 +302,15 @@ export function rxConfig( force:boolean, serverId?:string ):Observable<ConfigAnd
             })
         );
     } 
+
     return from( answers )
                     .pipe(map( (answers:any) => {
                         let p = url.parse(answers['url']);
-                        //console.dir( answers );
+                        
+                        let _path = normalizePath(removeSuffixFromPath(p.path || '') + (answers.suffix || '')) as string ;
+
                         let config:Config = {
-                            path:p.path || "" + answers.suffix,
+                            path:_path,
                             protocol:p.protocol as string,
                             host:p.hostname as string,
                             port:ConfigUtils.Port.value(p.port as string),
@@ -288,6 +329,9 @@ export function rxConfig( force:boolean, serverId?:string ):Observable<ConfigAnd
                         c.username = answers['username']
                         c.password = answers['password'];
 
+                        //console.dir( config );
+                        //console.dir( answers );
+
                         return [ config, c ] as ConfigAndCredentials;
                     }))
                     .pipe(flatMap( result =>
@@ -296,21 +340,6 @@ export function rxConfig( force:boolean, serverId?:string ):Observable<ConfigAnd
 
 }
 
-export function normalizePath( path:string|url.UrlObject ):string|url.UrlObject {
-
-    if( util.isString(path) ) {
-        let v = path as string;
-        return v.replace( /\/+/g, '/').replace(/\/+$/, '');
-    }
-    if( util.isObject(path) ) {
-        let v = path as url.UrlObject;
-        if( v.pathname ) {
-            v.pathname = v.pathname.replace( /\/+/g, '/').replace(/\/$/, '');
-            return v;
-        }
-    }
-    throw new Error("input parameter is invalid!"); 
-}
 
 
 function main() {

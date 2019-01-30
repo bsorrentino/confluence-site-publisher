@@ -1,15 +1,11 @@
 
-import * as util from 'util';
+import { Readable, Stream } from 'stream';
 import * as url from 'url';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as util from 'util';
+import { normalizePath } from './config';
+import { BaseConfig, ConfluenceService, ContentStorage, Credentials, Representation } from './confluence';
 
 import request = require('request');
-
-import { normalizePath } from './config';
-import {  BaseConfig, Credentials, ConfluenceService, ContentStorage, Representation } from './confluence';
-import { Stream, Readable } from 'stream';
-
 
 interface Ancestor {
   id:string;
