@@ -212,7 +212,7 @@ class XMLRPCConfluenceService/*Impl*/ implements ConfluenceService {
     return this.connection.getDescendents( pageId );
   }
 
-  getAttachment?( pageId:string, name:string, version:string ):Promise<Model.Attachment>
+  getAttachment( pageId:string, name:string, version:string ):Promise<Model.Attachment|null>
   {
     return Promise.reject("getAttachment not implemented yet");
   }
