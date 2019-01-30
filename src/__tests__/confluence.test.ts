@@ -1,13 +1,24 @@
 
 import * as url from 'url';
 import { normalizePath } from "../config";
-import { BaseConfig } from '../confluence';
+import { BaseConfig, PathSuffix } from '../confluence';
 
 import * as util from 'util';
 import * as fs from "fs";
 import * as path from "path";
 import * as xml from "xml2js";
 import {markdown2wiki} from "../md";
+
+test( "xmlrpc path match", () => {
+
+    let xmlrpcMatcher = new RegExp( `(${PathSuffix.XMLRPC})$` );
+    let restMatcher = new RegExp( `(${PathSuffix.REST})$` );
+    expect( "http://localhost/".match(xmlrpcMatcher) ).toBeFalsy();
+    expect( "http://localhost/".match(restMatcher) ).toBeFalsy();
+    expect( `http://localhost/${PathSuffix.XMLRPC}`.match(xmlrpcMatcher) ).toBeTruthy
+    expect( `http://localhost/${PathSuffix.REST}`.match(restMatcher) ).toBeTruthy();
+
+})
 
 describe( 'MARKDOWN TEST', () => {
 

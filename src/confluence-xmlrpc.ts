@@ -2,6 +2,7 @@ import {BaseConfig, Credentials, ConfluenceService, ContentStorage} from './conf
 
 import * as util from 'util';
 import * as xmlrpc from 'xmlrpc';
+import { Observable, Observer } from 'rxjs';
 
 interface ServerInfo {
   patchLevel:boolean,
@@ -41,14 +42,13 @@ class Confluence {
   token?:string; // auth token
 
   constructor( config:BaseConfig, public servicePrefix:string = "confluence1." ) {
-    config.path += '/rpc/xmlrpc';
     
     this.client = ( config.protocol === "https:") ? 
         xmlrpc.createSecureClient(config) :
         xmlrpc.createClient(config);
   }
 
-  login( user:string, password:string ):Promise<string> {
+  async login( user:string, password:string ):Promise<string> {
     if( this.token != null ) return Promise.resolve(this.token);
     return this.call<string>("login", [user,password] )
       .then( token => {
@@ -58,7 +58,7 @@ class Confluence {
       ;
   }
 
-  logout():Promise<boolean> {
+  async logout():Promise<boolean> {
     if( this.token == null ) return Promise.resolve(true);
     return this.call<boolean>("logout", [this.token] )
       .then( success => {
@@ -135,44 +135,43 @@ class Confluence {
 
 }
 
-export class XMLRPCConfluenceService/*Impl*/ implements ConfluenceService {
+export function create( config:BaseConfig, credentials:Credentials /*, ConfluenceProxy proxyInfo, SSLCertificateInfo sslInfo*/ ):Promise<XMLRPCConfluenceService> {
+  if( config == null ) throw "config argument is null!";
+  if( credentials == null ) throw "credentials argument is null!";
+  
+  /*
+  if( sslInfo == null ) throw new IllegalArgumentException("sslInfo argument is null!");
 
-  static  create( config:BaseConfig, credentials:Credentials /*, ConfluenceProxy proxyInfo, SSLCertificateInfo sslInfo*/ ):Promise<XMLRPCConfluenceService> {
-      if( config == null ) throw "config argument is null!";
-      if( credentials == null ) throw "credentials argument is null!";
-      
-      /*
-      if( sslInfo == null ) throw new IllegalArgumentException("sslInfo argument is null!");
-
-      if (!sslInfo.isIgnore() && url.startsWith("https")) {
-          HttpsURLConnection.setDefaultSSLSocketFactory( sslInfo.getSSLSocketFactory());
-          HttpsURLConnection.setDefaultHostnameVerifier( sslInfo.getHostnameVerifier() );
-      }
-      */
-
-      return new Promise<XMLRPCConfluenceService>( (resolve, reject) => {
-
-        let confluence = new Confluence(config);
-        confluence.login( credentials.username, credentials.password ).then( (token:string) => {
-
-            return confluence.getServerInfo();
-
-        }).then( (value:ServerInfo) => {
-
-            if( value.majorVersion >= 4 ) {
-              confluence.servicePrefix = "confluence2.";
-            }
-            resolve( new XMLRPCConfluenceService(confluence,credentials) );
-
-        }).catch( (error) => {
-          reject(error);
-        });
-
-      });
-
+  if (!sslInfo.isIgnore() && url.startsWith("https")) {
+      HttpsURLConnection.setDefaultSSLSocketFactory( sslInfo.getSSLSocketFactory());
+      HttpsURLConnection.setDefaultHostnameVerifier( sslInfo.getHostnameVerifier() );
   }
+  */
 
-  private constructor( public connection:Confluence, credentials:Credentials) {
+  return new Promise<XMLRPCConfluenceService>( (resolve, reject) => {
+
+    let confluence = new Confluence(config);
+    confluence.login( credentials.username, credentials.password ).then( (token:string) => {
+
+        return confluence.getServerInfo();
+
+    }).then( (value:ServerInfo) => {
+
+        if( value.majorVersion >= 4 ) {
+          confluence.servicePrefix = "confluence2.";
+        }
+        resolve( new XMLRPCConfluenceService(confluence,credentials) );
+
+    }).catch( (error) => {
+      reject(error);
+    });
+
+  });
+
+}
+
+class XMLRPCConfluenceService/*Impl*/ implements ConfluenceService {
+  constructor( public connection:Confluence, credentials:Credentials) {
   }
 
   get credentials():Credentials {
@@ -268,5 +267,11 @@ export class XMLRPCConfluenceService/*Impl*/ implements ConfluenceService {
 
     return this.connection.storePage(p);
   }
+
+  close(): Promise<boolean> {
+    return this.connection.logout();
+  }
+
+
 
 }

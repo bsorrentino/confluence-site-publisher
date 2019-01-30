@@ -12,7 +12,7 @@ import Preferences = require("preferences");
 
 import { Observable, Observer, throwError, of, from } from 'rxjs';
 import { flatMap, map, tap } from 'rxjs/operators';
-import { Config, Credentials } from "./confluence";
+import { Config, Credentials, PathSuffix } from "./confluence";
 
 export type ConfigAndCredentials = [Config,Credentials];
 
@@ -189,6 +189,17 @@ export function rxConfig( force:boolean, serverId?:string ):Observable<ConfigAnd
     let answers = inquirer.prompt( [
             {
                 type: "input",
+                name: "sitePath",
+                message: "site relative path",
+                default: defaultConfig.sitePath,
+                validate: ( value ) => {
+                    const exists = util.promisify( fs.exists );
+
+                    return exists( path.join( process.cwd(), value ));
+                }
+            },
+            {
+                type: "input",
                 name: "url",
                 message: "confluence url:",
                 default: ConfigUtils.Url.format( defaultConfig ),
@@ -199,6 +210,16 @@ export function rxConfig( force:boolean, serverId?:string ):Observable<ConfigAnd
                         return (valid) ? true : "url is not valid!";
                     }
             },
+            {
+                type: 'list',
+                name: 'suffix',
+                message: 'Which protocol want to use?',
+                default: () => { },
+                choices: [ 
+                    { name:'xmlrpc', value:PathSuffix.XMLRPC}, 
+                    { name:'rest', value:PathSuffix.REST }
+                ]            
+            },            
             {
                 type: "input",
                 name: "spaceId",
@@ -246,15 +267,15 @@ export function rxConfig( force:boolean, serverId?:string ):Observable<ConfigAnd
     return from( answers )
                     .pipe(map( (answers:any) => {
                         let p = url.parse(answers['url']);
-                        //console.log( p );
+                        //console.dir( answers );
                         let config:Config = {
-                            path:p.path || "",
+                            path:p.path || "" + answers.suffix,
                             protocol:p.protocol as string,
                             host:p.hostname as string,
                             port:ConfigUtils.Port.value(p.port as string),
                             spaceId:answers['spaceId'],
                             parentPageTitle:answers['parentPageTitle'],
-                            sitePath:SITE_PATH,
+                            sitePath:answers.sitePath,
                             serverId:defaultConfig.serverId
                         }
                         /*

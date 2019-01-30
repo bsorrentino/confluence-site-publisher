@@ -4,6 +4,10 @@
 import {UrlObject} from 'url';
 import { Stream } from 'stream';
 
+declare const enum PathSuffix {
+  XMLRPC = '/rpc/xmlrpc',
+  REST = '/rest/api'
+}
 declare const enum Representation {
   STORAGE="storage" , WIKI="wiki"
 }
@@ -68,5 +72,5 @@ interface ConfluenceService {
 
     addPage( page:Model.Page ):Promise<Model.Page>;
 
-
+    close():Promise<boolean>;
 }

@@ -1,4 +1,3 @@
-import {XMLRPCConfluenceService} from "./confluence-xmlrpc";
 import * as xml from "xml2js";
 import * as filesystem from "fs";
 import * as path from "path";
@@ -110,14 +109,14 @@ export class SiteProcessor {
 
     } 
 
-    private getOrCreatePage( spaceKey:string , parentPageTitle:string , title:string  ):Promise<Model.Page>
+    private async getOrCreatePage( spaceKey:string , parentPageTitle:string , title:string  ):Promise<Model.Page>
     {
       return this.confluence.getPage(spaceKey, parentPageTitle)
       .then( (parentPage:Model.Page) => this.getOrCreatePageFromParent(parentPage, title) )
       ;
     }
   
-    private getOrCreatePageFromParent( parentPage:Model.Page , title:string  ):Promise<Model.Page>
+    private async getOrCreatePageFromParent( parentPage:Model.Page , title:string  ):Promise<Model.Page>
     {
       const p:Model.Page = {
         space:parentPage.space,

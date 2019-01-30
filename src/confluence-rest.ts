@@ -365,24 +365,24 @@ class Confluence {
 
 }
 
-export class RESTConfluenceService/*Impl*/ implements ConfluenceService {
+export function create( config:BaseConfig, credentials:Credentials /*, ConfluenceProxy proxyInfo, SSLCertificateInfo sslInfo*/ ):Promise<RESTConfluenceService> {
+  if( config == null ) throw "config argument is null!";
+  if( credentials == null ) throw "credentials argument is null!";
+  
+
+  return new Promise<RESTConfluenceService>( (resolve, reject) => {
+
+    let confluence = new Confluence(config,credentials);
+
+    resolve( new RESTConfluenceService(confluence,credentials) );
+  });
+
+}
 
 
-  static  create( config:BaseConfig, credentials:Credentials /*, ConfluenceProxy proxyInfo, SSLCertificateInfo sslInfo*/ ):Promise<RESTConfluenceService> {
-      if( config == null ) throw "config argument is null!";
-      if( credentials == null ) throw "credentials argument is null!";
-      
+class RESTConfluenceService/*Impl*/ implements ConfluenceService {
 
-      return new Promise<RESTConfluenceService>( (resolve, reject) => {
-
-        let confluence = new Confluence(config,credentials);
-
-        resolve( new RESTConfluenceService(confluence,credentials) );
-      });
-
-  }
-
-  private constructor( public connection:Confluence, credentials:Credentials) {
+  constructor( public connection:Confluence, credentials:Credentials) {
   }
 
   get credentials():Credentials {
@@ -497,15 +497,20 @@ export class RESTConfluenceService/*Impl*/ implements ConfluenceService {
     return this.connection.addPage(p).then( page2Model );
   }
 
+  close(): Promise<boolean> {
+    return Promise.resolve(true);
+  }
+
 
 }
 
+/*
 
 async function main() {
 
   try {
 
-  let c = await RESTConfluenceService.create( {
+  let c = await create( {
     protocol:'http',
     host:'192.168.0.11',
     port:8090,
@@ -565,3 +570,4 @@ catch( e ) {
 }
 
 main();
+*/
