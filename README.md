@@ -4,9 +4,10 @@
 <img src="https://img.shields.io/github/stars/bsorrentino/confluence-site-publisher.svg">&nbsp;
 <a href="https://github.com/bsorrentino/confluence-site-publisher/issues">
 <img src="https://img.shields.io/github/issues/bsorrentino/confluence-site-publisher.svg">
-</a>&nbsp;
+</a>&nbsp;[![Build Status](https://travis-ci.org/bsorrentino/confluence-site-publisher.svg)](https://travis-ci.org/bsorrentino/confluence-site-publisher)
+
 <!--
-[![Build Status](https://travis-ci.org/amanganiello90/maven-confluence-plugin.svg)](https://travis-ci.org/amanganiello90/maven-confluence-plugin)
+[![Build Status](https://travis-ci.org/bsorrentino/confluence-site-publisher.svg?branch=master)](https://travis-ci.org/bsorrentino/confluence-site-publisher)
 -->
 
 ```
