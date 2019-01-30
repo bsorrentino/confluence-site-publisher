@@ -1,9 +1,17 @@
+/// <reference types="node" />
+/// <reference path="confluence-model.d.ts" />
 
+import {UrlObject} from 'url';
+import { Stream } from 'stream';
+
+declare const enum PathSuffix {
+  XMLRPC = '/rpc/xmlrpc',
+  REST = '/rest/api'
+}
 declare const enum Representation {
-  STORAGE=0 , WIKI=1
+  STORAGE="storage" , WIKI="wiki"
 }
 
-type ServiceProtocol = "http:"|"https:";
 
 interface BaseConfig {
   protocol:string, // ServiceProtocol
@@ -37,29 +45,6 @@ interface Credentials {
   password:string;
 }
 
-declare module Model {
-
-  export interface Attachment {
-    id?:string;
-    fileName:string;
-    contentType:string;
-    comment:string;
-    created?:Date;
-  }
-
-  export interface PageSummary {
-    id?:string;
-    title:string;
-    space:string;
-    parentId:any;
-  }
-
-  export interface Page extends PageSummary {
-    version?:number;
-    content?:string;
-  }
-
-}
 
 interface ConfluenceService {
 
@@ -73,22 +58,19 @@ interface ConfluenceService {
 
     getDescendents(pageId:string):Promise<Array<Model.PageSummary>>;
 
-    getAttachment?( pageId:string, name:string, version:string ):Promise<Model.Attachment>;
+    getAttachment( pageId:string, name:string, version:string ):Promise<Model.Attachment|null>;
 
     removePage( parentPage:Model.Page , title:string  ):Promise<boolean>;
 
     removePageById( pageId:string  ):Promise<boolean>;
 
-    addLabelByName( page:Model.Page, label:string ):Promise<boolean>;
+    addLabelsByName( page:Model.Page, ...label:string[] ):Promise<boolean>;
 
-    addAttachment( page:Model.Page, attachment:Model.Attachment, content:Buffer ):Promise<Model.Attachment>;
+    addAttachment( page:Model.Page, attachment:Model.Attachment, content:Buffer|Stream ):Promise<Model.Attachment>;
 
     storePageContent( page:Model.Page, content:ContentStorage  ):Promise<Model.Page>;
 
-    storePage( page:Model.Page ):Promise<Model.Page>;
+    addPage( page:Model.Page ):Promise<Model.Page>;
 
-    //call?( task:(ConfluenceService) => void );
-
-
-
+    close():Promise<boolean>;
 }

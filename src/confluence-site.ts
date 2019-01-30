@@ -1,12 +1,14 @@
-import {XMLRPCConfluenceService} from "./confluence-xmlrpc";
 import * as xml from "xml2js";
 import * as filesystem from "fs";
 import * as path from "path";
+import * as fs from 'fs';
 
-import { Observable, Observer, throwError, of, from, bindNodeCallback, empty, concat } from 'rxjs';
-import { flatMap, map, tap, concatMap } from 'rxjs/operators';
+import { Observable, Observer, throwError, of, from, bindNodeCallback, empty, concat, defer } from 'rxjs';
+import { flatMap, map, tap, concatMap, switchMap } from 'rxjs/operators';
 
 import {markdown2wiki} from "./md";
+import { ConfluenceService, ContentStorage, Representation, PathSuffix } from "./confluence";
+import { Stream } from "stream";
 
 export interface ElementAttributes {
     name?:string;
@@ -38,7 +40,8 @@ export class SiteProcessor {
         public confluence:ConfluenceService,
         public spaceId:string,
         public parentTitle:string,
-        public sitePath:string 
+        public sitePath:string,
+        private suffix:PathSuffix
         ) {} 
 
 
@@ -102,21 +105,39 @@ export class SiteProcessor {
                 contentType:ctx.meta.$['contentType'] as string,
                 fileName:ctx.meta.$.name as string
             };
-        return rxReadFile( path.join(this.sitePath, ctx.meta.$.uri as string) )
-                .pipe( tap( undefined, undefined, () => console.log( "created attachment:", attachment.fileName )) )
-                .pipe(flatMap( (buffer:Buffer) => 
-                            from(confluence.addAttachment( ctx.parent as Model.Page, attachment, buffer ))));
 
+        const parent = ctx.parent as Model.Page;
+
+        let rxBufferOrStream:Observable<Buffer|Stream>;
+        
+        if( this.suffix == PathSuffix.REST ) {
+
+            rxBufferOrStream = 
+                from( confluence.getAttachment( parent.id as string, attachment.fileName, '1' ))
+                .pipe( switchMap( att => {
+                    if( att ) attachment.id = att.id;
+                    return defer( () => 
+                        of(fs.createReadStream( path.join(this.sitePath, ctx.meta.$.uri as string ) )) );
+                }));
+        }
+        else {
+            rxBufferOrStream = rxReadFile( path.join(this.sitePath, ctx.meta.$.uri as string) );
+        }
+
+        return rxBufferOrStream
+                    .pipe( tap( undefined, undefined, () => console.log( "creating attachment:", attachment.fileName )) )
+                    .pipe(flatMap( buffer => 
+                        from(confluence.addAttachment( parent, attachment, buffer ))));
     } 
 
-    private getOrCreatePage( spaceKey:string , parentPageTitle:string , title:string  ):Promise<Model.Page>
+    private async getOrCreatePage( spaceKey:string , parentPageTitle:string , title:string  ):Promise<Model.Page>
     {
       return this.confluence.getPage(spaceKey, parentPageTitle)
       .then( (parentPage:Model.Page) => this.getOrCreatePageFromParent(parentPage, title) )
       ;
     }
   
-    private getOrCreatePageFromParent( parentPage:Model.Page , title:string  ):Promise<Model.Page>
+    private async getOrCreatePageFromParent( parentPage:Model.Page , title:string  ):Promise<Model.Page>
     {
       const p:Model.Page = {
         space:parentPage.space,
@@ -132,7 +153,7 @@ export class SiteProcessor {
         return Promise.resolve(p);
       })
       .catch( (e) => {
-        return this.confluence.storePage( p );
+        return this.confluence.addPage( p );
       })
       ;
   
@@ -159,7 +180,7 @@ export class SiteProcessor {
     private rxProcessLabels( ctx:PageContext ) {
         return from( ctx.meta.label || [])
                     .pipe( flatMap( (data:string) => 
-                        from(this.confluence.addLabelByName( ctx.parent as Model.Page, data )) ) )
+                        from(this.confluence.addLabelsByName( ctx.parent as Model.Page, data )) ) )
                     ;        
     } 
 

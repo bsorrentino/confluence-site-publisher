@@ -1,7 +1,8 @@
-/// <reference path="confluence.d.ts" />
+import {BaseConfig, Credentials, ConfluenceService, ContentStorage} from './confluence'
 
 import * as util from 'util';
 import * as xmlrpc from 'xmlrpc';
+import { Observable, Observer } from 'rxjs';
 
 interface ServerInfo {
   patchLevel:boolean,
@@ -41,14 +42,13 @@ class Confluence {
   token?:string; // auth token
 
   constructor( config:BaseConfig, public servicePrefix:string = "confluence1." ) {
-    config.path += '/rpc/xmlrpc';
-    //let data = Object.assign( info, {path: '/rpc/xmlrpc'});
+    
     this.client = ( config.protocol === "https:") ? 
         xmlrpc.createSecureClient(config) :
         xmlrpc.createClient(config);
   }
 
-  login( user:string, password:string ):Promise<string> {
+  async login( user:string, password:string ):Promise<string> {
     if( this.token != null ) return Promise.resolve(this.token);
     return this.call<string>("login", [user,password] )
       .then( token => {
@@ -58,7 +58,7 @@ class Confluence {
       ;
   }
 
-  logout():Promise<boolean> {
+  async logout():Promise<boolean> {
     if( this.token == null ) return Promise.resolve(true);
     return this.call<boolean>("logout", [this.token] )
       .then( success => {
@@ -135,44 +135,43 @@ class Confluence {
 
 }
 
-export class XMLRPCConfluenceService/*Impl*/ implements ConfluenceService {
+export function create( config:BaseConfig, credentials:Credentials /*, ConfluenceProxy proxyInfo, SSLCertificateInfo sslInfo*/ ):Promise<XMLRPCConfluenceService> {
+  if( config == null ) throw "config argument is null!";
+  if( credentials == null ) throw "credentials argument is null!";
+  
+  /*
+  if( sslInfo == null ) throw new IllegalArgumentException("sslInfo argument is null!");
 
-  static  create( config:BaseConfig, credentials:Credentials /*, ConfluenceProxy proxyInfo, SSLCertificateInfo sslInfo*/ ):Promise<XMLRPCConfluenceService> {
-      if( config == null ) throw "config argument is null!";
-      if( credentials == null ) throw "credentials argument is null!";
-      
-      /*
-      if( sslInfo == null ) throw new IllegalArgumentException("sslInfo argument is null!");
-
-      if (!sslInfo.isIgnore() && url.startsWith("https")) {
-          HttpsURLConnection.setDefaultSSLSocketFactory( sslInfo.getSSLSocketFactory());
-          HttpsURLConnection.setDefaultHostnameVerifier( sslInfo.getHostnameVerifier() );
-      }
-      */
-
-      return new Promise<XMLRPCConfluenceService>( (resolve, reject) => {
-
-        let confluence = new Confluence(config);
-        confluence.login( credentials.username, credentials.password ).then( (token:string) => {
-
-            return confluence.getServerInfo();
-
-        }).then( (value:ServerInfo) => {
-
-            if( value.majorVersion >= 4 ) {
-              confluence.servicePrefix = "confluence2.";
-            }
-            resolve( new XMLRPCConfluenceService(confluence,credentials) );
-
-        }).catch( (error) => {
-          reject(error);
-        });
-
-      });
-
+  if (!sslInfo.isIgnore() && url.startsWith("https")) {
+      HttpsURLConnection.setDefaultSSLSocketFactory( sslInfo.getSSLSocketFactory());
+      HttpsURLConnection.setDefaultHostnameVerifier( sslInfo.getHostnameVerifier() );
   }
+  */
 
-  private constructor( public connection:Confluence, credentials:Credentials) {
+  return new Promise<XMLRPCConfluenceService>( (resolve, reject) => {
+
+    let confluence = new Confluence(config);
+    confluence.login( credentials.username, credentials.password ).then( (token:string) => {
+
+        return confluence.getServerInfo();
+
+    }).then( (value:ServerInfo) => {
+
+        if( value.majorVersion >= 4 ) {
+          confluence.servicePrefix = "confluence2.";
+        }
+        resolve( new XMLRPCConfluenceService(confluence,credentials) );
+
+    }).catch( (error) => {
+      reject(error);
+    });
+
+  });
+
+}
+
+class XMLRPCConfluenceService/*Impl*/ implements ConfluenceService {
+  constructor( public connection:Confluence, credentials:Credentials) {
   }
 
   get credentials():Credentials {
@@ -213,7 +212,7 @@ export class XMLRPCConfluenceService/*Impl*/ implements ConfluenceService {
     return this.connection.getDescendents( pageId );
   }
 
-  getAttachment?( pageId:string, name:string, version:string ):Promise<Model.Attachment>
+  getAttachment( pageId:string, name:string, version:string ):Promise<Model.Attachment|null>
   {
     return Promise.reject("getAttachment not implemented yet");
   }
@@ -228,9 +227,21 @@ export class XMLRPCConfluenceService/*Impl*/ implements ConfluenceService {
     return this.connection.removePage( pageId );
   }
 
-  addLabelByName( page:Model.Page, label:string  ):Promise<boolean>
+  addLabelsByName( page:Model.Page, ...labels: string[]  ):Promise<boolean>
   {
-    return this.connection.addLabelByName(page,label);
+      return new Promise( (resolve, reject ) => {
+
+        if( !labels || labels.length == 0 ) {
+          return resolve(false);
+        }
+
+        labels.forEach( async ( label, index ) => { 
+          await this.connection.addLabelByName(page, label );
+          if( index == labels.length - 1) resolve(true)
+        })
+  
+      })
+    
   }
 
   addAttachment( page:Model.Page, attachment:Model.Attachment, content:Buffer ):Promise<Model.Attachment>
@@ -250,22 +261,17 @@ export class XMLRPCConfluenceService/*Impl*/ implements ConfluenceService {
     return this.connection.storePage(p);
   }
 
-  storePage( page:Model.Page ):Promise<Model.Page>
+  addPage( page:Model.Page ):Promise<Model.Page>
   {
     let p = page as Page;
 
     return this.connection.storePage(p);
   }
 
-  /*
-  call( task:(ConfluenceService) => void ) {
-    this.connection.login( this.credentials.username, this.credentials.password )
-      .then( (token) => {
-          console.log( "session started!");
-          task( this );
-          return this.connection.logout();
-      })
-      .then( () => console.log( "session ended!") );
+  close(): Promise<boolean> {
+    return this.connection.logout();
   }
-  */
+
+
+
 }

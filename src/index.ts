@@ -1,8 +1,9 @@
-/// <reference path="preferences.d.ts" />
 
-import {XMLRPCConfluenceService} from "./confluence-xmlrpc";
+import {create as XMLRPCConfluenceCreate } from "./confluence-xmlrpc";
+import {create as RESTConfluenceCreate } from "./confluence-rest";
 import {SiteProcessor, Element} from "./confluence-site";
-import {rxConfig} from "./config";
+import {rxConfig, restMatcher} from "./config";
+import { PathSuffix } from './confluence';
 
 import * as URL from "url";
 import * as path from "path";
@@ -16,6 +17,7 @@ import minimist     = require("minimist");
 
 import { Observable, Observer, of, from, bindNodeCallback, combineLatest } from 'rxjs';
 import { flatMap, map, tap, filter, reduce } from 'rxjs/operators';
+import { Config, Credentials, ConfluenceService } from "./confluence";
 
 interface Figlet {
   ( input:string, font:string|undefined, callback:(err:any, res:string) => void  ):void;
@@ -235,7 +237,7 @@ function usage() {
 /**
  * 
  */
-function newSiteProcessor( confluence:XMLRPCConfluenceService, config:Config ):SiteProcessor {
+function newSiteProcessor( confluence:ConfluenceService, config:Config ):SiteProcessor {
 
     let siteHome = ( path.isAbsolute(config.sitePath) ) ?
                         path.dirname(config.sitePath) :
@@ -244,7 +246,8 @@ function newSiteProcessor( confluence:XMLRPCConfluenceService, config:Config ):S
     let site = new SiteProcessor( confluence,
                               config.spaceId,
                               config.parentPageTitle,
-                              siteHome
+                              siteHome,
+                              config.path.match(restMatcher) ? PathSuffix.REST : PathSuffix.XMLRPC
                             );
     return site;
                   
@@ -255,24 +258,41 @@ function newSiteProcessor( confluence:XMLRPCConfluenceService, config:Config ):S
  */
 function rxConfluenceConnection(
                 config:Config,
-                credentials:Credentials ):Observable<[XMLRPCConfluenceService,Config]>
+                credentials:Credentials ):Observable<[ConfluenceService,Config]>
 {
 
-      let service = XMLRPCConfluenceService.create( config, credentials );
+      let rxConnection:Promise<ConfluenceService>;
 
-      let rxConnection = from( service );
+      const restMatcher = new RegExp( `(${PathSuffix.REST})$` );
 
-      let rxCfg = of( config );
+      if( config.path.match( restMatcher )) {
 
-      return combineLatest( rxConnection, rxCfg, 
-                (conn, conf) => { return [conn, conf] as [XMLRPCConfluenceService,Config]; } );
+        rxConnection = RESTConfluenceCreate( config, credentials );
+        
+      }
+      else { 
+
+        const xmlrpcMatcher = new RegExp( `(${PathSuffix.XMLRPC})$` );
+
+        if( !config.path.match( xmlrpcMatcher )) {
+          
+          config.path += PathSuffix.XMLRPC;
+  
+        }
+
+        rxConnection = XMLRPCConfluenceCreate( config, credentials );
+
+      }
+      
+      return combineLatest( rxConnection, of( config ), 
+                (conn, conf) => { return [conn, conf] as [ConfluenceService,Config]; } );
 
 }
 
 /**
  * 
  */
-function rxDelete( confluence:XMLRPCConfluenceService, config:Config  ):Observable<number> {
+function rxDelete( confluence:ConfluenceService, config:Config  ):Observable<number> {
     //let recursive = args['recursive'] || false;
 
     let siteFile = path.basename( config.sitePath );
@@ -317,16 +337,14 @@ function rxDelete( confluence:XMLRPCConfluenceService, config:Config  ):Observab
 /**
  * 
  */
-function rxGenerateSite( config:Config, confluence:XMLRPCConfluenceService ):Observable<any> {
+function rxGenerateSite( config:Config, confluence:ConfluenceService ):Observable<any> {
 
     let siteFile = path.basename( config.sitePath );
 
     let site = newSiteProcessor( confluence, config );
 
     return site.rxStart( siteFile )
-      .pipe( tap( undefined, undefined, () => confluence.connection.logout().then( () => {
-        //console.log("logged out!");
-      })));
+    ;
 
 }
 
