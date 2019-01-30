@@ -6,8 +6,9 @@
 <img src="https://img.shields.io/github/issues/bsorrentino/confluence-site-publisher.svg">
 </a>&nbsp;
 <!--
-[![Build Status](https://travis-ci.org/amanganiello90/maven-confluence-plugin.svg)](https://travis-ci.org/amanganiello90/maven-confluence-plugin)
+[![Build Status](https://travis-ci.org/bsorrentino/confluence-site-publisher.svg?branch=master)](https://travis-ci.org/bsorrentino/confluence-site-publisher)
 -->
+[![Build Status](https://travis-ci.org/bsorrentino/confluence-site-publisher.svg)](https://travis-ci.org/bsorrentino/confluence-site-publisher)
 
 ```
  __   __        ___            ___       __   ___     __    ___  ___ 
