@@ -2,7 +2,7 @@
 import {create as XMLRPCConfluenceCreate } from "./confluence-xmlrpc";
 import {create as RESTConfluenceCreate } from "./confluence-rest";
 import {SiteProcessor, Element} from "./confluence-site";
-import {rxConfig} from "./config";
+import {rxConfig, restMatcher} from "./config";
 import { PathSuffix } from './confluence';
 
 import * as URL from "url";
@@ -246,7 +246,8 @@ function newSiteProcessor( confluence:ConfluenceService, config:Config ):SitePro
     let site = new SiteProcessor( confluence,
                               config.spaceId,
                               config.parentPageTitle,
-                              siteHome
+                              siteHome,
+                              config.path.match(restMatcher) ? PathSuffix.REST : PathSuffix.XMLRPC
                             );
     return site;
                   
