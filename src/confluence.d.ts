@@ -58,7 +58,7 @@ interface ConfluenceService {
 
     getDescendents(pageId:string):Promise<Array<Model.PageSummary>>;
 
-    getAttachment?( pageId:string, name:string, version:string ):Promise<Model.Attachment>;
+    getAttachment( pageId:string, name:string, version:string ):Promise<Model.Attachment|null>;
 
     removePage( parentPage:Model.Page , title:string  ):Promise<boolean>;
 
@@ -66,7 +66,7 @@ interface ConfluenceService {
 
     addLabelsByName( page:Model.Page, ...label:string[] ):Promise<boolean>;
 
-    addAttachment( page:Model.Page, attachment:Model.Attachment, content:Buffer|(()=>Stream) ):Promise<Model.Attachment>;
+    addAttachment( page:Model.Page, attachment:Model.Attachment, content:Buffer|Stream ):Promise<Model.Attachment>;
 
     storePageContent( page:Model.Page, content:ContentStorage  ):Promise<Model.Page>;
 
