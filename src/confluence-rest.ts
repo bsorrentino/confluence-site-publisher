@@ -3,6 +3,8 @@ import { Readable, Stream } from 'stream';
 import * as url from 'url';
 import * as util from 'util';
 import { normalizePath } from './config';
+import * as querystring from 'querystring';
+
 import { BaseConfig, ConfluenceService, ContentStorage, Credentials, Representation } from './confluence';
 
 import request = require('request');
@@ -66,11 +68,12 @@ interface PageAttachment  extends Page {
 }
 
 interface CreateAttachmentInput  {
+  id?:string,
   comment?:string;
   minorEdit?:boolean;
   filename:string;
   contentType:string;
-  content:() => Stream,
+  content:Stream,
 }
 
 const EXPAND = 'space,version,container';
@@ -96,7 +99,6 @@ function buffer2Stream( buffer:Buffer ):Stream {
  * 
  */
 function attachment2Model<T extends Model.Attachment>( a:PageAttachment ) {
-
   return {
     id: a.id, 
     fileName: a.title, 
@@ -135,6 +137,16 @@ function model2Page<T extends Model.Page, P extends Page>( p:T ):P {
   } as P;
 } 
 
+function getHttpErrorMessage( res:request.Response ):string {
+
+  if( res.statusMessage )       return res.statusMessage;
+  if( util.isString(res.body) ) return res.body;
+  if( util.isObject(res.body) ) return `${res.body.reason} - ${res.body.message}`;
+
+  return '';
+
+}
+
 function _POST_PUT( method:string, auth:request.AuthOptions, serviceUrl:string, inputBody:any ):Promise<request.ResponseAsJSON> 
 {
 
@@ -154,7 +166,9 @@ function _POST_PUT( method:string, auth:request.AuthOptions, serviceUrl:string, 
           if( err ) return reject( err );
 
           if( res.statusCode != 200 ) { 
-            let err:any = new Error( `statusCode:${res.statusCode} ${res.statusMessage}`);
+            const msg = getHttpErrorMessage( res );
+
+            let err:any = new Error( `${res.statusCode} - ${msg}`);
             err.code = res.statusCode;
             err.body = body;
             return reject( err) ;
@@ -184,7 +198,10 @@ function _POST_PUT( method:string, auth:request.AuthOptions, serviceUrl:string, 
           if( err ) return reject( err );
 
           if( res.statusCode >= 400 ) { 
-            let err:any = new Error( `statusCode:${res.statusCode} ${res.statusMessage}`);
+            const msg = getHttpErrorMessage( res );
+
+            let err:any = new Error( `${res.statusCode} - ${msg}`);
+
             err.code = res.statusCode;
             err.body = body;
             return reject( err) ;
@@ -305,10 +322,42 @@ class Confluence {
     })
   }
 
+  getAttachment( pageId:string, fileName:string ):Promise<PageAttachment|null> {
+
+    return this._GET( `${this.baseUrl}/content/${pageId}/child/attachment?filename=${querystring.escape(fileName)}&expand=${EXPAND}`)
+      .then( res => {
+
+        if( util.isUndefined(res.body.results) || !util.isArray(res.body.results) ) return Promise.reject( "invalid result");
+        //if( res.body.results.length==0 ) return Promise.reject( "result is empty");      
+        if( res.body.results.length==0 ) return Promise.resolve(null);
+
+        return Promise.resolve(res.body.results[0] as PageAttachment);
+        
+      });
+  }
+
+  getAttachments( pageId:string, fileName:string ):Promise<Array<PageAttachment>> {
+
+    return this._GET( `${this.baseUrl}/content/${pageId}/child/attachment?expand=${EXPAND}`)
+      .then( res => {
+
+        if( util.isUndefined(res.body.results) || !util.isArray(res.body.results) ) return Promise.reject( "invalid result");
+        if( res.body.results.length==0 ) return Promise.reject( "result is empty");
+  
+        return Promise.resolve(res.body as Array<PageAttachment>);
+        
+      });
+  }
+
   addAttachment(pageId:string, input:CreateAttachmentInput):Promise<PageAttachment>   {
+
+    let serviceUrl = (input.id) ?
+      `${this.baseUrl}/content/${pageId}/child/attachment/${input.id}/data` : 
+      `${this.baseUrl}/content/${pageId}/child/attachment` ;
+
     return new Promise( ( resolve, reject ) => {
       request( 
-        `${this.baseUrl}/content/${pageId}/child/attachment`, 
+        serviceUrl, 
         {
           headers: {
             'User-Agent': 'confluence-site-publisher',
@@ -320,7 +369,7 @@ class Confluence {
             comment: input.comment,
             minorEdit: String(input.minorEdit),
             file: {
-              value: input.content(),
+              value: input.content,
               options: {
                 filename: input.filename,
                 contentType: input.contentType
@@ -331,8 +380,11 @@ class Confluence {
         ( err, res, body ) => {
           if( err ) return reject( err );
 
-          if( res.statusCode != 200 ) { 
-            let err:any = new Error( `statusCode:${res.statusCode} ${res.statusMessage}`);
+          if( res.statusCode >= 400 ) { 
+
+            const msg = getHttpErrorMessage( res );
+
+            let err:any = new Error( `${res.statusCode} - ${msg}`);
             err.code = res.statusCode;
             err.body = body;
             return reject( err) ;
@@ -340,10 +392,14 @@ class Confluence {
            
           const result = res.toJSON();
 
-          if( util.isUndefined(result.body.results) || !util.isArray(result.body.results) ) return Promise.reject( "invalid result");
-          if( result.body.results.length==0 ) return Promise.reject( "result is empty");
+          if( util.isUndefined(result.body.results)) return resolve( result.body as PageAttachment );
+            
+          if( !util.isArray(result.body.results) )  return Promise.reject( "invalid result");
+          if( result.body.results.length==0 )       return Promise.reject( "result is empty");
+          
+          return resolve( result.body.results[0] as PageAttachment );
     
-          resolve( result.body.results[0] as PageAttachment );
+          
         });
       });
   }
@@ -434,15 +490,17 @@ class RESTConfluenceService/*Impl*/ implements ConfluenceService {
     return this.connection.addLabelByName(page, ...labels);
   }
 
-  getAttachment?( pageId:string, name:string, version:string ):Promise<Model.Attachment>
+  getAttachment( pageId:string, name:string, version:string ):Promise<Model.Attachment|null>
   {
-    return Promise.reject("getAttachment not implemented yet");
+    return this.connection.getAttachment( pageId, name )
+        .then( att =>  ( att ) ? attachment2Model( att ) : null );
   }
 
-  addAttachment( page:Model.Page, attachment:Model.Attachment, content:(()=>Stream) ):Promise<Model.Attachment>
+  addAttachment( page:Model.Page, attachment:Model.Attachment, content:Stream ):Promise<Model.Attachment>
   {
 
     return this.connection.addAttachment( String(page.id), {
+      id: attachment.id,
       comment: attachment.comment, 
       minorEdit: false, 
       contentType: attachment.contentType, 
@@ -500,70 +558,90 @@ class RESTConfluenceService/*Impl*/ implements ConfluenceService {
 
 }
 
-/*
+
+const __MODULE_TEST__ = false;
+
+import { createReadStream } from 'fs';
+import { join } from 'path';
+if( __MODULE_TEST__ ) {
+
 
 async function main() {
 
-  try {
+    try {
+  
+    let c = await create( {
+      protocol:'http',
+      //host:'192.168.0.11',
+      host:'localhost',
+      port:8090,
+      path:'rest/api'
+    }, {
+      username:'admin',
+      password:'admin'
+    } );
+  
+    const getHomeRes = await c.getPage( 'TEST', 'Home' );
+    if( getHomeRes && getHomeRes.id ) {
+      const addLabelRes = await c.addLabelsByName( getHomeRes, 'label1', 'label2', 'label3');
+      const delPageRes = await c.removePageById( String(getHomeRes.id) )
+    }
+  
+    const getPageRes = await c.getPage( 'TEST', 'TEST' )
+      
+    console.log( "GETPAGE RESPONSE\n", getPageRes );
+  
+    
+    const addPageRes = await c.addPage( {
+            title: 'Home',
+            parentId: getPageRes.id,
+            space: getPageRes.space,
+            //version: 1
+          });
+      
+    console.log( "CREATEPAGE RESPONSE\n", addPageRes);
+    
+    const addLabelRes = await c.addLabelsByName( addPageRes, 'label1', 'label2');
 
-  let c = await create( {
-    protocol:'http',
-    host:'192.168.0.11',
-    port:8090,
-    path:'rest/api'
-  }, {
-    username:'admin',
-    password:'admin'
-  } );
+    const addAttRes0 = await c.addAttachment( addPageRes, {
+      comment: "test1", 
+      contentType: 'application/pdf', 
+      fileName: 'notation_guide1.pdf',
+    }, createReadStream( join( __dirname, '..', 'site', 'Notation Guide.pdf') ))
+  
+    const addAttRes = await c.addAttachment( addPageRes, {
+      comment: "test", 
+      contentType: 'application/pdf', 
+      fileName: 'notation_guide.pdf',
+    }, createReadStream( join( __dirname, '..', 'site', 'Notation Guide.pdf') ))
+  
+    console.log( "ADDATTACHMENT RESPONSE\n", addPageRes);
+    console.dir(addAttRes, { depth: 5 });
+  
+    let storePageRes = await c.storePageContent( addPageRes, {
+      representation: Representation.WIKI,
+      value: 'h1. HELLO WORLD 2!'
+    })
 
-  const getHomeRes = await c.getPage( 'TEST', 'Home' );
-  if( getHomeRes && getHomeRes.id ) {
-    const addLabelRes = await c.addLabelsByName( getHomeRes, 'label1', 'label2', 'label3');
-    const delPageRes = await c.removePageById( String(getHomeRes.id) )
+    await c.storePageContent( storePageRes, {
+      representation: Representation.WIKI,
+      value: 'h1. HELLO WORLD 3!'
+    })
+
+    let getAttRes = await c.connection.getAttachment( addPageRes.id as string, 'notation_guide.pdf' );
+
+
+    console.log( "GETATTACHMENT RESPONSE");
+    console.dir( getAttRes, {depth: 5 } );
+  
   }
-
-  const getPageRes = await c.getPage( 'TEST', 'TEST' )
-    
-  console.log( "GETPAGE RESPONSE\n", getPageRes );
-
+  catch( e ) {
+    console.error( "ERROR\n", e );
+  }
   
-  const addPageRes = await c.addPage( {
-          title: 'Home',
-          parentId: getPageRes.id,
-          space: getPageRes.space,
-          //version: 1
-        });
-    
-  console.log( "CREATEPAGE RESPONSE\n", addPageRes);
+  }
   
-  const addLabelRes = await c.addLabelsByName( addPageRes, 'label1', 'label2');
-
-  const addAttRes = await c.addAttachment( addPageRes, {
-    comment: "test", 
-    contentType: 'application/pdf', 
-    fileName: 'notation_guide.pdf',
-  },() => fs.createReadStream( path.join( __dirname, '..', 'site', 'Notation Guide.pdf') ))
-
-  console.log( "ADDATTACHMENT RESPONSE\n", addPageRes);
-  console.dir(addAttRes, { depth: 5 });
-
-  let storePageRes = await c.storePageContent( addPageRes, {
-    representation: Representation.WIKI,
-    value: 'h1. HELLO WORLD!'
-  })
-
-  await c.storePageContent( storePageRes, {
-    representation: Representation.WIKI,
-    value: 'h1. HELLO WORLD 2!'
-  })
-
-
-}
-catch( e ) {
-  console.error( "ERROR\n", e );
+  main();
+  
 }
 
-}
-
-main();
-*/
