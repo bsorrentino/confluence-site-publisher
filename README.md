@@ -32,7 +32,7 @@ The Site is described using a [Site descriptor](http://bsorrentino.github.io/mav
 
 ### Notes
 
-> Currently only **xmlrpc** protocol is supported (*REST coming soon*)
+> From version 2.x both  **rest** and **xmlrpc** protocols are supported 
 
 ## Install 
 
