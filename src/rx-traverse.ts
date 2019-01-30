@@ -1,6 +1,7 @@
 import traverse = require('traverse');
-import Rx = require("rx");
+import { Observable, Observer } from 'rxjs';
 
+ 
 function removeSingleArrays(obj:any, filter?:(key:string) => boolean ) {
   // Traverse all the elements of the object
   traverse(obj).forEach(function traversing(value) {
@@ -12,13 +13,13 @@ function removeSingleArrays(obj:any, filter?:(key:string) => boolean ) {
   });
 }
 
-function rxTraverse( obj:Object ):Rx.Observable<Object> {
+function rxTraverse( obj:Object ):Observable<Object> {
 
-    return Rx.Observable.create( (observer) => {
+    return Observable.create( (observer:Observer<Object>) => {
 
       traverse(obj).forEach(function traversing(value) {
 
-        observer.onNext( value );
+        observer.next( value );
         // As the XML parser returns single fields as arrays.
         /*
         if (value instanceof Array && value.length === 1) {
@@ -27,7 +28,7 @@ function rxTraverse( obj:Object ):Rx.Observable<Object> {
         }
         */
       });
-      observer.onCompleted();
+      observer.complete();
     });
 
 }
