@@ -19,10 +19,19 @@ export type ConfigAndCredentials = [Config,Credentials];
 const CONFIG_FILE       = "config.json";
 const SITE_PATH         = "site.xml"
 
-const restMatcher = new RegExp( `(${PathSuffix.REST})$` );
-const xmlrpcMatcher = new RegExp( `(${PathSuffix.XMLRPC})$` );
+/**
+ * 
+ */
+export const restMatcher = new RegExp( `(${PathSuffix.REST})$` );
+/**
+ * 
+ */
+export const xmlrpcMatcher = new RegExp( `(${PathSuffix.XMLRPC})$` );
 
-
+/**
+ * 
+ * @param path 
+ */
 export function normalizePath( path:string|url.UrlObject ):string|url.UrlObject {
 
     if( util.isString(path) ) {
