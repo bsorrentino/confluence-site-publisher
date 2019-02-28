@@ -5,3 +5,4 @@ ts/
 .travis.yml
 tsconfig.json
 typings.json
+!dist/
