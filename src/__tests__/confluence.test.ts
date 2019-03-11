@@ -9,6 +9,8 @@ import * as path from "path";
 import * as xml from "xml2js";
 import {markdown2wiki} from "../md";
 
+import YAML = require('yaml');
+
 test( "xmlrpc path match", () => {
 
     let xmlrpcMatcher = new RegExp( `(${PathSuffix.XMLRPC})$` );
@@ -125,4 +127,32 @@ describe( "URL TEST", () => {
 
 
     })
+
+
 });
+
+describe( 'YAML TEST', () => {
+
+    const readFile = util.promisify(fs.readFile);
+
+    test( "yaml parse", async () => {
+        const  filePath = path.join( process.cwd(), "site", "site.yml" );
+        const file = await readFile( filePath );
+        const content = YAML.parse( file.toString(), { } );
+    
+        expect( content ).not.toBeNull();
+        expect( content.home ).not.toBeNull();
+        expect( content.home.name ).toEqual('the first');
+        expect( content.home.attachments ).toBeInstanceOf( Array );
+        expect( content.home.attachments.length ).toEqual(1);
+        expect( content.home.children ).toBeInstanceOf( Array );
+        expect( content.home.children.length ).toEqual(2);
+
+        
+    
+    })
+
+})
+
+
+

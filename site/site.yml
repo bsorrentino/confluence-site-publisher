@@ -1,0 +1,20 @@
+home:
+    name: "the first"
+    uri: first.confluence
+    attachments:
+        -   name: "Notation Guide.pdf"
+            comment: "Notation Guide"
+            contentType: "application/pdf"
+            version: 1  
+    children:
+        -   name: "markdown demo1"
+            uri: demo1.md    
+        -   name: "the second"
+            uri: second.confluence   
+            children:
+                -   name: "the third"
+                    uri: third.confluence   
+
+labels:    
+  - test
+  - test2
