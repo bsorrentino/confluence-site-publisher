@@ -1,7 +1,7 @@
 
 import {create as XMLRPCConfluenceCreate } from "./confluence-xmlrpc";
 import {create as RESTConfluenceCreate } from "./confluence-rest";
-import {SiteProcessor, Element} from "./confluence-site";
+import {SiteProcessor} from "./confluence-site";
 import {rxConfig, restMatcher} from "./config";
 import { PathSuffix } from './confluence';
 
@@ -18,6 +18,8 @@ import minimist     = require("minimist");
 import { Observable, Observer, of, from, bindNodeCallback, combineLatest } from 'rxjs';
 import { flatMap, map, tap, filter, reduce } from 'rxjs/operators';
 import { Config, Credentials, ConfluenceService } from "./confluence";
+import { XMLSiteProcessor } from "./confluence-site-xml";
+import { YAMLSiteProcessor } from "./confluence-site-yml";
 
 interface Figlet {
   ( input:string, font:string|undefined, callback:(err:any, res:string) => void  ):void;
@@ -237,18 +239,31 @@ function usage() {
 /**
  * 
  */
-function newSiteProcessor( confluence:ConfluenceService, config:Config ):SiteProcessor {
+function newSiteProcessor( confluence:ConfluenceService, config:Config ):SiteProcessor<any> {
 
     let siteHome = ( path.isAbsolute(config.sitePath) ) ?
                         path.dirname(config.sitePath) :
                         path.join( process.cwd(), path.dirname(config.sitePath ));
+    const ext = path.extname( siteHome );
 
-    let site = new SiteProcessor( confluence,
+    const suffix = config.path.match(restMatcher) ? PathSuffix.REST : PathSuffix.XMLRPC;
+
+    let site = ( ext.match(/xml/i) ) ? 
+      
+        new XMLSiteProcessor( confluence,
                               config.spaceId,
                               config.parentPageTitle,
                               siteHome,
-                              config.path.match(restMatcher) ? PathSuffix.REST : PathSuffix.XMLRPC
-                            );
+                              suffix
+                            )
+        :
+        
+        new YAMLSiteProcessor(  confluence,
+                                config.spaceId,
+                                config.parentPageTitle,
+                                siteHome,
+                                suffix
+                              );
     return site;
                   
 }
@@ -307,10 +322,10 @@ function rxDelete( confluence:ConfluenceService, config:Config  ):Observable<num
               //.doOnNext( (result) => console.dir( result ) )
               .pipe( flatMap( (result) => {
                 
-                let [parent,pages] = result;
-                let first = pages[0] as Element ;
-                
-                let getHome = from( confluence.getPageByTitle( parent.id as string, first.$.name as string) );
+                const [parent,pages] = result;
+                const attrs = site.attributes( pages[0] );
+
+                let getHome = from( confluence.getPageByTitle( parent.id as string, attrs.name as string) );
 
                 return getHome
                         .pipe( filter( (home) => home!=null ) )
