@@ -9,6 +9,11 @@ import * as path from "path";
 import * as xml from "xml2js";
 import {markdown2wiki} from "../md";
 
+import YAML = require('yaml');
+
+const readFile = util.promisify( fs.readFile );
+
+
 test( "xmlrpc path match", () => {
 
     let xmlrpcMatcher = new RegExp( `(${PathSuffix.XMLRPC})$` );
@@ -22,8 +27,6 @@ test( "xmlrpc path match", () => {
 
 describe( 'MARKDOWN TEST', () => {
 
-
-    const readFile = util.promisify( fs.readFile );
 
     test( 'markdown test 1', async () => {
         expect.assertions(1);
@@ -50,25 +53,6 @@ describe( 'MARKDOWN TEST', () => {
         console.log( markdown2wiki( buff ) );
     
     })
-
-
-    test( "xmlParse()", async ( done ) => {
-        let parser = new xml.Parser();
-        let file = path.join( process.cwd(), "site", "site.xml" );
-    
-        
-        const buff = await readFile( file );
-    
-        expect( buff ).not.toBeNull();
-     
-        parser.parseString(buff.toString(), (err:any, result:any) => {
-            
-                console.dir( result, { depth: 4 } );
-                done();
-        });
-    
-    })
-    
 
 })
 
@@ -125,4 +109,59 @@ describe( "URL TEST", () => {
 
 
     })
+
+
 });
+
+describe( 'XML TEST', () => {
+
+    test( "xmlParse()", async ( done ) => {
+        let parser = new xml.Parser();
+        let file = path.join( process.cwd(), "site", "site.xml" );
+    
+        
+        const buff = await readFile( file );
+    
+        expect( buff ).not.toBeNull();
+     
+        parser.parseString(buff.toString(), (err:any, result:any) => {
+            
+            expect( result ).not.toBeNull();
+            console.dir( result, { depth: 4 } );
+
+            const home = result['bsc:site']['home'];
+            expect( home ).toBeInstanceOf(Array);
+            expect( home.length ).toEqual(1);
+
+            console.dir( home, { depth: 4 } );
+            
+            done();
+        });
+    
+    })
+ 
+});
+
+describe( 'YAML TEST', () => {
+
+    test( "yaml parse", async () => {
+        const  filePath = path.join( process.cwd(), "site", "site.yml" );
+        const file = await readFile( filePath );
+        const content = YAML.parse( file.toString(), { } );
+    
+        expect( content ).not.toBeNull();
+        expect( content.home ).not.toBeNull();
+        expect( content.home.name ).toEqual('the first');
+        expect( content.home.attachments ).toBeInstanceOf( Array );
+        expect( content.home.attachments.length ).toEqual(1);
+        expect( content.home.children ).toBeInstanceOf( Array );
+        expect( content.home.children.length ).toEqual(2);
+
+        
+    
+    })
+
+})
+
+
+

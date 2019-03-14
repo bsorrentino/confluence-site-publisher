@@ -1,5 +1,5 @@
 typings/
-config.json
+config*.json
 .vscode
 ts/
 .travis.yml
