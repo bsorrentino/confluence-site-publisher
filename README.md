@@ -22,7 +22,7 @@ A CLI (*Command Line Interface*) for publish your site directly to confluence al
 
 This project should be considered as **[NodeJS](https://nodejs.org/)** version of the [confluence maven plugin](https://github.com/bsorrentino/maven-confluence-plugin) developed using [reactive javascript extension](https://github.com/Reactive-Extensions/RxJS)
 
-The Site is described using a [Site descriptor](http://bsorrentino.github.io/maven-confluence-plugin/site_guide.html) that is compatible with the one used by [confluence maven plugin](https://github.com/bsorrentino/maven-confluence-plugin)
+The Site is described using a [XML](http://bsorrentino.github.io/maven-confluence-plugin/site_xml_guide.html) or [YAML](http://bsorrentino.github.io/maven-confluence-plugin/site_yaml_guide.html)  **Site descriptor**  that is compatible with the one used by [confluence maven plugin](https://github.com/bsorrentino/maven-confluence-plugin)
 
 ### Supported Formats
 
