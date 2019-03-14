@@ -1,38 +1,27 @@
-import * as xml from "xml2js";
 import * as filesystem from "fs";
-import * as path from "path";
 import * as fs from 'fs';
-
-import { Observable, Observer, throwError, of, from, bindNodeCallback, empty, concat, defer } from 'rxjs';
-import { flatMap, map, tap, concatMap, switchMap } from 'rxjs/operators';
-
-import {markdown2wiki} from "./md";
-import { ConfluenceService, ContentStorage, Representation, PathSuffix } from "./confluence";
+import * as path from "path";
+import { bindNodeCallback, concat, defer, empty, from, Observable, of } from 'rxjs';
+import { concatMap, flatMap, map, switchMap, tap } from 'rxjs/operators';
 import { Stream } from "stream";
+import { ConfluenceService, ContentStorage, PathSuffix, Representation } from "./confluence";
+import { markdown2wiki } from "./md";
+
+
+const rxReadFile = bindNodeCallback( filesystem.readFile );
 
 export interface ElementAttributes {
-    name?:string;
+    name:string;
     uri?:string;
     [n: string]: any;
 }
 
-export interface Element {
-    $:ElementAttributes;
-    attachment?:Array<Element>;
-    child?:Array<Element>
-    label?:Array<string>
-}
-
-interface PageContext {
-    meta:Element;
+interface PageContext<E> {
+    meta:E;
     parent?:Model.Page;
 }
 
-let parser = new xml.Parser();
-let rxParseString:( input:string )=>Observable<any> = bindNodeCallback( parser.parseString );
-export let rxReadFile = bindNodeCallback( filesystem.readFile );
-
-export class SiteProcessor {
+export abstract class SiteProcessor<E> {
     /**
      * 
      */
@@ -44,31 +33,28 @@ export class SiteProcessor {
         private suffix:PathSuffix
         ) {} 
 
+    public abstract attributes( element:E ):ElementAttributes;
+    protected abstract attachments( element:E ):Array<E>|undefined;
+    protected abstract children( element:E ):Array<E>|undefined;
+    protected abstract labels( element:E ):Array<string>|undefined;
 
     /**
      * 
      */
-    rxParse( fileName:string ):Observable<Array<Object>> {
-        return rxReadFile( path.join(this.sitePath, fileName) )
-                .pipe( flatMap( (value:Buffer) => rxParseString( value.toString() ) ))
-                //.doOnNext( (value) => console.dir( value, { depth:4 }) )
-                .pipe( map( (value:any) => {
-                    for( let first in value ) return value[first]['home'];
-                }));
-    }
+    public abstract rxParse( fileName:string ):Observable<E>; 
 
     /**
      * 
      */
-    rxStart( fileName:string ):Observable<any> {
+    public rxStart( fileName:string ):Observable<any> {
         return this.rxParse( fileName )
-                .pipe( flatMap( (value) => this.rxProcessChild(value) ) );
+                .pipe( flatMap( (value) => this.rxProcessChildren( [value] ) ) );
     }
 
     /**
      * 
      */
-    rxReadContent( filePath:string ):Observable<ContentStorage> {
+    private rxReadContent( filePath:string ):Observable<ContentStorage> {
         
         return rxReadFile( filePath )
             .pipe( map( (value:Buffer) => {
@@ -97,13 +83,15 @@ export class SiteProcessor {
     /**
      * 
      */
-    rxCreateAttachment( ctx:PageContext ) {
+    private rxCreateAttachment( ctx:PageContext<E> ) {
         let confluence = this.confluence;
 
+        const attrs = this.attributes( ctx.meta );
+
         let attachment:Model.Attachment =  {
-                comment:ctx.meta.$['comment'] as string,
-                contentType:ctx.meta.$['contentType'] as string,
-                fileName:ctx.meta.$.name as string
+                comment:attrs['comment'] as string,
+                contentType:attrs['contentType'] as string,
+                fileName:attrs.name as string
             };
 
         const parent = ctx.parent as Model.Page;
@@ -117,11 +105,11 @@ export class SiteProcessor {
                 .pipe( switchMap( att => {
                     if( att ) attachment.id = att.id;
                     return defer( () => 
-                        of(fs.createReadStream( path.join(this.sitePath, ctx.meta.$.uri as string ) )) );
+                        of(fs.createReadStream( path.join(this.sitePath, (attrs.uri || attrs.name) ) )) );
                 }));
         }
         else {
-            rxBufferOrStream = rxReadFile( path.join(this.sitePath, ctx.meta.$.uri as string) );
+            rxBufferOrStream = rxReadFile( path.join(this.sitePath, (attrs.uri || attrs.name) ) );
         }
 
         return rxBufferOrStream
@@ -161,40 +149,42 @@ export class SiteProcessor {
       /**
      * 
      */
-    rxCreatePage( ctx:PageContext ) {
-        let confluence = this.confluence;
+    private rxCreatePage( ctx:PageContext<E> ) {
+        const confluence = this.confluence;
+
+        const attrs = this.attributes( ctx.meta );
 
         let getOrCreatePage = 
             ( !ctx.parent ) ? 
-                    from(this.getOrCreatePage( this.spaceId, this.parentTitle, ctx.meta.$.name as string )) :
-                    from(this.getOrCreatePageFromParent( ctx.parent, ctx.meta.$.name as string ))
+                    from(this.getOrCreatePage( this.spaceId, this.parentTitle, attrs.name  )) :
+                    from(this.getOrCreatePageFromParent( ctx.parent, attrs.name ))
                     ;
         return getOrCreatePage
                 .pipe( tap( (page) => console.log( "creating page:", page.title )) )
                 .pipe( flatMap( (page) => {
-                    return this.rxReadContent( path.join(this.sitePath, ctx.meta.$.uri as string) )
+                    return this.rxReadContent( path.join(this.sitePath, (attrs.uri || attrs.name) ) )
                         .pipe(flatMap( (storage) => from(confluence.storePageContent( page, storage ))));
                 }))                   
     }   
 
-    private rxProcessLabels( ctx:PageContext ) {
-        return from( ctx.meta.label || [])
+    private rxProcessLabels( ctx:PageContext<E> ) {
+        return from( this.labels(ctx.meta) || [])
                     .pipe( flatMap( (data:string) => 
                         from(this.confluence.addLabelsByName( ctx.parent as Model.Page, data )) ) )
                     ;        
     } 
 
-    private rxProcessAttachments( ctx:PageContext ) {
-        return from( ctx.meta.attachment || [])
-                    .pipe( map( (data:Element) => { return { meta:data, parent:ctx.parent }} ))
-                    .pipe( flatMap( (ctx:PageContext) => this.rxCreateAttachment( ctx ) )) 
+    private rxProcessAttachments( ctx:PageContext<E> ) {
+        return from( this.attachments(ctx.meta) || [])
+                    .pipe( map( (data:E) => { return { meta:data, parent:ctx.parent }} ))
+                    .pipe( flatMap( (ctx:PageContext<E>) => this.rxCreateAttachment( ctx ) )) 
                     ;        
     } 
 
-    rxProcessChild( child:Array<Object>, parent?:Model.Page ):Observable<any> {
-        if( !child || child.length == 0 ) return empty();
+    private rxProcessChildren( children:Array<E>, parent?:Model.Page ):Observable<any> {
+        if( !children || children.length == 0 ) return empty();
 
-        let first = child[0] as Element ;
+        let first = children[0] as E ;
         
         let childObservable = 
             this.rxCreatePage( {meta:first, parent:parent } )
@@ -202,15 +192,15 @@ export class SiteProcessor {
 
                     let o1 = this.rxProcessAttachments( {meta:first, parent:page} ); 
                     let o2 = this.rxProcessLabels( {meta:first, parent:page} ); 
-                    let o3 = from( first.child || [] )
-                            .pipe( map( (data:Element) => { return { meta:data, parent:page } }) )                           
-                            .pipe( concatMap( (ctx:PageContext) => {
+                    let o3 = from( this.children(first) || [] )
+                            .pipe( map( (data:E) => { return { meta:data, parent:page } }) )                           
+                            .pipe( concatMap( (ctx:PageContext<E>) => {
                     
                                 return this.rxCreatePage( ctx )
                                         .pipe( flatMap( (child:Model.Page) => {
                                             let o1 = this.rxProcessAttachments( {meta:ctx.meta, parent:child} );    
                                             let o2 = this.rxProcessLabels( {meta:ctx.meta, parent:child} ); 
-                                            let o3 = this.rxProcessChild(ctx.meta.child || [], child );
+                                            let o3 = this.rxProcessChildren(this.children(ctx.meta) || [], child );
                                             return concat( o1, o2, o3 );
                                         }))
                             }));
