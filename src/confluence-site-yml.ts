@@ -30,7 +30,9 @@ export class YAMLSiteProcessor extends SiteProcessor<Element> {
      */
     public rxParse( fileName:string ):Observable<Element> {
         return rxReadFile( path.join(this.sitePath, fileName) )
-                .pipe( map( (value:Buffer) => YAML.parse( value.toString(), { } ) ));
+                .pipe( map( value => YAML.parse( value.toString(), { } ) ))
+                .pipe( map( root => root.home) )
+                ;
     }
 
     public attributes( element:Element ):ElementAttributes { return element; }

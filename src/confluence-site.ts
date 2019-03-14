@@ -11,7 +11,7 @@ import { markdown2wiki } from "./md";
 const rxReadFile = bindNodeCallback( filesystem.readFile );
 
 export interface ElementAttributes {
-    name?:string;
+    name:string;
     uri?:string;
     [n: string]: any;
 }
@@ -105,11 +105,11 @@ export abstract class SiteProcessor<E> {
                 .pipe( switchMap( att => {
                     if( att ) attachment.id = att.id;
                     return defer( () => 
-                        of(fs.createReadStream( path.join(this.sitePath, attrs.uri as string ) )) );
+                        of(fs.createReadStream( path.join(this.sitePath, (attrs.uri || attrs.name) ) )) );
                 }));
         }
         else {
-            rxBufferOrStream = rxReadFile( path.join(this.sitePath, attrs.uri as string) );
+            rxBufferOrStream = rxReadFile( path.join(this.sitePath, (attrs.uri || attrs.name) ) );
         }
 
         return rxBufferOrStream
@@ -150,19 +150,19 @@ export abstract class SiteProcessor<E> {
      * 
      */
     private rxCreatePage( ctx:PageContext<E> ) {
-        let confluence = this.confluence;
+        const confluence = this.confluence;
 
         const attrs = this.attributes( ctx.meta );
 
         let getOrCreatePage = 
             ( !ctx.parent ) ? 
-                    from(this.getOrCreatePage( this.spaceId, this.parentTitle, attrs.name as string )) :
-                    from(this.getOrCreatePageFromParent( ctx.parent, attrs.name as string ))
+                    from(this.getOrCreatePage( this.spaceId, this.parentTitle, attrs.name  )) :
+                    from(this.getOrCreatePageFromParent( ctx.parent, attrs.name ))
                     ;
         return getOrCreatePage
                 .pipe( tap( (page) => console.log( "creating page:", page.title )) )
                 .pipe( flatMap( (page) => {
-                    return this.rxReadContent( path.join(this.sitePath, attrs.uri as string) )
+                    return this.rxReadContent( path.join(this.sitePath, (attrs.uri || attrs.name) ) )
                         .pipe(flatMap( (storage) => from(confluence.storePageContent( page, storage ))));
                 }))                   
     }   

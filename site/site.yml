@@ -15,6 +15,6 @@ home:
                 -   name: "the third"
                     uri: third.confluence   
 
-labels:    
-  - test
-  - test2
+    labels:    
+    - test
+    - test2

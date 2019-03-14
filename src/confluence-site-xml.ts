@@ -31,7 +31,7 @@ export class XMLSiteProcessor extends SiteProcessor<Element> {
                 .pipe( map( (value:any) => {
                     for( let first in value ) return value[first]['home'];
                 }))
-                .pipe( take(1) )
+                .pipe( map( e => e[0] ) )
                 ;
     }
     public attributes( element:Element ):ElementAttributes { return element.$; }

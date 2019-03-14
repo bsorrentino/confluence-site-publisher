@@ -241,14 +241,15 @@ function usage() {
  */
 function newSiteProcessor( confluence:ConfluenceService, config:Config ):SiteProcessor<any> {
 
-    let siteHome = ( path.isAbsolute(config.sitePath) ) ?
+    const ext = path.extname( path.basename( config.sitePath ) );
+
+    const siteHome = ( path.isAbsolute(config.sitePath) ) ?
                         path.dirname(config.sitePath) :
                         path.join( process.cwd(), path.dirname(config.sitePath ));
-    const ext = path.extname( siteHome );
 
     const suffix = config.path.match(restMatcher) ? PathSuffix.REST : PathSuffix.XMLRPC;
 
-    let site = ( ext.match(/xml/i) ) ? 
+    const site = ( ext.match(/xml/i) ) ? 
       
         new XMLSiteProcessor( confluence,
                               config.spaceId,
@@ -322,8 +323,8 @@ function rxDelete( confluence:ConfluenceService, config:Config  ):Observable<num
               //.doOnNext( (result) => console.dir( result ) )
               .pipe( flatMap( (result) => {
                 
-                const [parent,pages] = result;
-                const attrs = site.attributes( pages[0] );
+                const [parent,page] = result;
+                const attrs = site.attributes( page );
 
                 let getHome = from( confluence.getPageByTitle( parent.id as string, attrs.name as string) );
 
@@ -354,9 +355,9 @@ function rxDelete( confluence:ConfluenceService, config:Config  ):Observable<num
  */
 function rxGenerateSite( config:Config, confluence:ConfluenceService ):Observable<any> {
 
-    let siteFile = path.basename( config.sitePath );
+    const siteFile = path.basename( config.sitePath );
 
-    let site = newSiteProcessor( confluence, config );
+    const site = newSiteProcessor( confluence, config );
 
     return site.rxStart( siteFile )
     ;
