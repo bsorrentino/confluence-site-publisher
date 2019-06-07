@@ -41,13 +41,13 @@ class WikiRenderer implements markdown.Renderer {
 
 	del(text:string) { return '-' + text + '-' }
 
-	codespan(text:string) { return '{{' + text + '}}' }
+	codespan(text:string) { return `{{${text}}}` }
 
-	blockquote(quote:string) { return '{quote}' + quote + '{quote}' }
+	blockquote(quote:string) { return `{quote}${quote}{quote}\n` }
 
 	br() { return '\n' }
 
-	hr() { return '----' }
+	hr() { return '----\n' }
 
 	link(href:string, title:string, text:string) {
 		let arr = [text,href];
@@ -68,11 +68,17 @@ class WikiRenderer implements markdown.Renderer {
 
 	image(href:string, title:string, text:string) { return '!' + href + '!'}
 
-	table(header:string, body:string) { return header + body + '\n' }
+	table(header:string, body:string) { 
+        return `${header}${body}\n`;
+    }
 
-	tablerow(content:string /*, flags*/) { return content + '\n' }
+	tablerow(content:string ) { 
+        const isHeader = content.startsWith('||');
+        return content + (isHeader ? '||' : '|') + '\n';
+    }
 
 	tablecell(content:string, flags:any) {
+
 		var type = flags.header ? '||' : '|'
 		return type + content;
 	}
@@ -80,7 +86,7 @@ class WikiRenderer implements markdown.Renderer {
 	code(code:string, lang:string) {
 		lang = (<any>this.langs)[lang] ? lang :  "";
 
-		return '{code:' + lang + '}\n' + code + '\n{code}\n\n';
+		return `{code:${lang}}\n${code}\n{code}\n\n`;
 	}
 
     text(text: string): string { return text; }
@@ -88,10 +94,15 @@ class WikiRenderer implements markdown.Renderer {
 
 const  renderer = new WikiRenderer()
 
-export function markdown2wiki(md:string|Buffer) {
+/**
+ * 
+ * @param md markdown content as string
+ * @param sanitize Sanitize the output. Ignore any HTML that has been input.
+ */
+export function markdown2wiki(md:string|Buffer, sanitize=true) {
 	return markdown(md.toString(), {
         renderer: renderer,
-        sanitize:true // Sanitize the output. Ignore any HTML that has been input.
+        sanitize:sanitize
     });
 }
 
