@@ -1,6 +1,6 @@
 {
   "name": "confluence-site",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "description": "A Command Line Interface (CLI) for publish your site directly to confluence",
   "bin": "./main.js",
   "main": "main.js",
@@ -28,7 +28,7 @@
     "extend": "^3.0.2",
     "figlet": "^1.2.0",
     "inquirer": "^2.0.0",
-    "marked": "^0.5.1",
+    "marked": "^0.6.2",
     "minimist": "^1.2.0",
     "preferences": "^0.2.1",
     "request": "^2.85.0",
