@@ -1,6 +1,8 @@
 import markdown = require("marked");
 
 class WikiRenderer implements markdown.Renderer {
+    
+    constructor( public options:markdown.MarkedOptions ) {} 
 
     langs = {
         'actionscript3' :true,
@@ -28,6 +30,10 @@ class WikiRenderer implements markdown.Renderer {
         'html'          :true,
         'xml'           :true
     };
+
+    checkbox(checked: boolean): string {
+        return ''
+    }
 
 	paragraph(text:string) { return text + '\n\n'; }
 	
@@ -92,14 +98,14 @@ class WikiRenderer implements markdown.Renderer {
     text(text: string): string { return text; }
 }
 
-const  renderer = new WikiRenderer()
+const  renderer = new WikiRenderer({})
 
 /**
  * 
  * @param md markdown content as string
  * @param sanitize Sanitize the output. Ignore any HTML that has been input.
  */
-export function markdown2wiki(md:string|Buffer, sanitize=true) {
+export function markdown2wiki( md:string|Buffer, sanitize=true) {
 	return markdown(md.toString(), {
         renderer: renderer,
         sanitize:sanitize

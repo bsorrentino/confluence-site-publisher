@@ -48,19 +48,8 @@ export function normalizePath( path:string|url.UrlObject ):string|url.UrlObject 
     throw new Error("input parameter is invalid!"); 
 }
 
-function removeSuffixFromPath( path:string|Config ) {
-    if( util.isString(path) ) {
-        let v = path as string;
-        return v.replace( restMatcher, '' ).replace( xmlrpcMatcher, '');
-    }
-    if( util.isObject(path) ) {
-        let v = path as url.UrlObject;
-        if( v.path ) {
-            v.path = v.path.replace( restMatcher, '' ).replace( xmlrpcMatcher, '');
-            return v;
-        }
-    }
-    throw new Error("input parameter is invalid!"); 
+function removeSuffixFromPath( path:string ) {
+    return path.replace( restMatcher, '' ).replace( xmlrpcMatcher, '');
 }
 
 namespace ConfigUtils {
