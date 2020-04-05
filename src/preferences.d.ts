@@ -20,8 +20,13 @@ declare module "preferences" {
 
 declare module "preferences" {
 
+    type Data = { [key:string]:any }
+
+    interface P {
+        clear():void
+    }
     interface PreferencesStatic   {
-        new<T>( identifier:string, data: T ): T;
+        new<T>( identifier:string, data: T ): T & P;
     }
     var Preferences:PreferencesStatic;
     export = Preferences;

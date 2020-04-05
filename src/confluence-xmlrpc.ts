@@ -119,10 +119,10 @@ class Confluence {
 
       this.client.methodCall(operation, args, (error:any, value:any) => {
         if (error) {
-            console.log('error:', error);
-            console.log('req headers:', error.req && error.req._header);
-            console.log('res code:', error.res && error.res.statusCode);
-            console.log('res body:', error.body);
+            //console.log('error:', error);
+            //console.log('req headers:', error.req && error.req._header);
+            //console.log('res code:', error.res && error.res.statusCode);
+            //console.log('res body:', error.body);
             reject(error);
           } else {
             //console.log('value:', value);
