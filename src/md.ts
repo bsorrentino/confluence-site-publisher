@@ -107,8 +107,8 @@ const  renderer = new WikiRenderer({})
  */
 export function markdown2wiki( md:string|Buffer, sanitize=true) {
 	return markdown(md.toString(), {
-        renderer: renderer,
-        sanitize:sanitize
+        renderer: renderer
+        //,sanitize:sanitize // deprecated
     });
 }
 

@@ -30,7 +30,7 @@
     "inquirer": "^7.1.0",
     "marked": "^0.8.2",
     "minimist": "^1.2.5",
-    "preferences": "^1.0.2",
+    "preferences": "git+https://github.com/caffeinalab/preferences.git",
     "request": "^2.88.2",
     "rxjs": "^6.5.5",
     "traverse": "^0.6.6",

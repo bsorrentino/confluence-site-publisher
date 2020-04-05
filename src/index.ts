@@ -2,7 +2,7 @@
 import {create as XMLRPCConfluenceCreate } from "./confluence-xmlrpc";
 import {create as RESTConfluenceCreate } from "./confluence-rest";
 import {SiteProcessor} from "./confluence-site";
-import {rxConfig, restMatcher} from "./config";
+import {rxConfig, restMatcher, resetCredentials} from "./config";
 import { PathSuffix } from './confluence';
 
 import * as URL from "url";
@@ -63,6 +63,20 @@ export function deploy() {
 
 }
 
+/**
+ * reset configuration
+ */
+export function reset() {
+  rxFiglet( LOGO, undefined )
+  .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
+  .pipe( flatMap( () => from(resetCredentials(args['serverid']))  ))
+  .subscribe(
+    ()=> {},
+    (err)=> console.error( chalk.red(err) )
+  );
+
+}
+
 export function init() {
     rxFiglet( LOGO, undefined )
     .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
@@ -92,7 +106,7 @@ export function remove() {
     .pipe( flatMap( (result) => rxConfluenceConnection( result[0], result[1]  ) ))
     .pipe( flatMap( (result) => rxDelete( result[0], result[1] ) ))
     .subscribe(
-      (value)=> { console.log( "# page(s) removed ", value )},
+      (value)=> { console.log( '# page(s) removed ', value )},
       (err)=> console.error( chalk.red(err) )
     ); 
 }
@@ -197,7 +211,7 @@ function usageCommand( cmd:string, desc:string, ...args: string[]) {
   desc = chalk.italic.gray(desc);
   return args.reduce( (previousValue, currentValue)=> {
     return util.format( "%s %s", previousValue, chalk.yellow(currentValue) );
-  }, "\n\n" + cmd ) + desc;
+  }, '\n' + cmd ) + desc;
 }
 
 /**
@@ -210,28 +224,22 @@ function usage() {
   .subscribe( (logo) => {
 
     console.log( chalk.bold.magenta(logo as string),
-      "\n" +
-      chalk.cyan( "Usage:") +
-      " confluence-site " +
-      usageCommand( "init", "\t// create/update configuration", "--serverid <serverid>" ) +
-      usageCommand( "deploy", "\t\t// deploy site to confluence", "[--config]" ) +
-      usageCommand( "delete", "\t\t\t\t// delete site" ) +
-      usageCommand( "download", " // download page content", "--pageid <pageid>", "[--file]", "[--wiki]" ) +
-      usageCommand( "info", "\t\t\t\t// show configuration" ) +
-      "\n\n" +
-      chalk.cyan("Options:") +
-      "\n\n" +
-      " --serverid \t" + chalk.italic.gray("// it is the credentials' profile.") +
-      "\n" +
-      " --config\t" + chalk.italic.gray("// force reconfiguration.") +
-      "\n" +
-      " --pageid \t" + chalk.italic.gray("// the page identifier.") +
-      "\n" +
-      " --file \t" + chalk.italic.gray("// the output file name.") +
-      "\n" +
-      " --wiki \t" + chalk.italic.gray("// indicate deprecated wiki content format ") +
-      "\n"
-    );
+`
+${chalk.cyan('Usage:')}
+confluence-site 
+${usageCommand( 'init', '\t// create/update configuration', '--serverid <serverid>' )}
+${usageCommand( 'deploy', '\t\t// deploy site to confluence', '[--config]' )}
+${usageCommand( 'delete', '\t\t\t\t// delete site' )}
+${usageCommand( 'download', ' // download page content', '--pageid <pageid>', '[--file]', '[--wiki]' )}
+${usageCommand( 'info', '\t\t\t\t// show configuration' )}
+
+${chalk.cyan('Options:')}
+ --serverid\t${chalk.italic.gray('// it is the credentials\' profile.')}
+ --config\t${chalk.italic.gray('// force reconfiguration.')}
+ --pageid\t${chalk.italic.gray('// the page identifier.')}
+ --file \t${chalk.italic.gray('// the output file name.')}
+ --wiki \t${chalk.italic.gray('// indicate deprecated wiki content format ')}
+`);
 
   });
 }
