@@ -35,7 +35,7 @@ describe( 'MARKDOWN TEST', () => {
 **bold**
 _italic_
 ~strikethrough~
-\`the code \`
+\`the code\`
 > blockquote1
 > blockquote2
   
