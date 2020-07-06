@@ -1,5 +1,5 @@
 {
-  "version":"3.0.1",  
+  "version":"3.1.0",  
   "compilerOptions": {
     /* Basic Options */
     "target": "ES2016",                          /* Specify ECMAScript target version: 'ES3' (default), 'ES5', 'ES2015', 'ES2016', 'ES2017', or 'ESNEXT'. */
