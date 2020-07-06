@@ -43,7 +43,7 @@
     "@types/chalk": "^2.2.0",
     "@types/inquirer": "6.5.0",
     "@types/jest": "^25.2.1",
-    "@types/marked": "^0.7.3",
+    "@types/marked": "^1.1.0",
     "@types/minimist": "^1.2.0",
     "@types/node": "^13.11.0",
     "@types/request": "^2.48.4",
