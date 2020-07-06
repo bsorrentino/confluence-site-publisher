@@ -1,7 +1,7 @@
 <bsc:site
     xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'
     xmlns:bsc='https://github.com/bsorrentino/maven-confluence-plugin'
-    xsi:schemaLocation='ConfluenceSiteSchema-3.3.0-beta2.xsd'>
+    xsi:schemaLocation='ConfluenceSiteSchema-3.4.0.xsd'>
 
     <home  name="home" uri="home.confluence">
 
