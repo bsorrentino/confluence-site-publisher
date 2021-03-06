@@ -1,7 +1,7 @@
 typings/
 config*.json
 .vscode
-ts/
+src/
 .travis.yml
 tsconfig.json
 typings.json
