@@ -4,3 +4,6 @@ typings/
 config*.json
 .vscode/
 dist/
+#parcel
+.cache/
+.parcel-cache/
