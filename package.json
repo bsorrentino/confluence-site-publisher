@@ -1,6 +1,6 @@
 {
   "name": "confluence-site",
-  "version": "3.2.2-develop",
+  "version": "3.2.2",
   "description": "A Command Line Interface (CLI) for publish your site directly to confluence",
   "bin": "./main.js",
   "main": "main.js",
