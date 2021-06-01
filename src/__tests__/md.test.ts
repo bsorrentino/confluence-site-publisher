@@ -97,7 +97,8 @@ expect( result ).toBe(
 
 * one
 * two
-* have a *strong* and _pure_ feeling
+
+ have a *strong* and _pure_ feeling
 
 
 {warning}`

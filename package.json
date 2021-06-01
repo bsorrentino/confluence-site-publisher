@@ -10,7 +10,7 @@
     "email": "bartolomeo.sorrentino@gmail.com"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --watch",
     "start": "node main.js",
     "test": "jest"
   },

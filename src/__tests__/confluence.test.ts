@@ -10,8 +10,10 @@ import * as xml from "xml2js";
 
 import YAML = require('yaml');
 
+
 const readFile = util.promisify( fs.readFile );
 
+jest.setTimeout(20000)
 
 test( "xmlrpc path match", () => {
 
@@ -83,28 +85,28 @@ describe( "URL TEST", () => {
 
 describe( 'XML TEST', () => {
 
-    test( "xmlParse()", async ( done ) => {
+    test( "xmlParse()", ( done ) => {
         let parser = new xml.Parser();
         let file = path.join( process.cwd(), "site", "site.xml" );
     
-        
-        const buff = await readFile( file );
+        readFile( file ).then( buff => {
+
+            expect( buff ).not.toBeNull();
+
+            parser.parseString(buff.toString(), (err:any, result:any) => {
+
+                expect( result ).not.toBeNull();
+                console.dir( result, { depth: 4 } );
     
-        expect( buff ).not.toBeNull();
-     
-        parser.parseString(buff.toString(), (err:any, result:any) => {
-            
-            expect( result ).not.toBeNull();
-            console.dir( result, { depth: 4 } );
+                const home = result['bsc:site']['home'];
+                expect( home ).toBeInstanceOf(Array);
+                expect( home.length ).toEqual(1);
+    
+                console.dir( home, { depth: 4 } );
 
-            const home = result['bsc:site']['home'];
-            expect( home ).toBeInstanceOf(Array);
-            expect( home.length ).toEqual(1);
-
-            console.dir( home, { depth: 4 } );
-            
-            done();
-        });
+                done()
+            })
+        })
     
     })
  
