@@ -1,8 +1,8 @@
 /// <reference types="./marked" />
 
-import marked = require('marked')
+import { marked as MD } from 'marked'
 
-type Blockquote = marked.Tokens.Blockquote
+type Blockquote = MD.Tokens.Blockquote
 
 const decreaseQuoteLevel = (l:string) => {
     const r = /(\s*>)(.*)/g.exec(l)
@@ -22,10 +22,14 @@ const mytokenizer = {
 
             lines[0] = `{${rxResult[1]}|title=${rxResult[2]}}`         
             
+            const text = lines.map( decreaseQuoteLevel ).join('\n')
+            
             return {
                 type: 'blockquote',
                 raw: src,
-                text: lines.map( decreaseQuoteLevel ).join('\n')
+                text: text,
+                tokens:  MD.lexer( text )
+                
             } 
         }
 
@@ -34,13 +38,13 @@ const mytokenizer = {
 
 }
 
-marked.use( {
+MD.use( {
     tokenizer: <any>mytokenizer
 })
 
-export class WikiRenderer implements marked.Renderer {
+export class WikiRenderer implements MD.Renderer {
     
-    constructor( public options:marked.MarkedOptions ) {} 
+    constructor( public options:MD.MarkedOptions ) {} 
 
     langs = {
         'actionscript3' :true,
@@ -151,7 +155,7 @@ const  renderer = new WikiRenderer({})
  * @param sanitize Sanitize the output. Ignore any HTML that has been input.
  */
 export function markdown2wiki( md:string|Buffer, sanitize=true) {
-    return marked(md.toString(), {
+    return MD.parse(md.toString(), {
         renderer: renderer
         //,sanitize:sanitize // deprecated
     });

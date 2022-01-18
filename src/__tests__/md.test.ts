@@ -1,6 +1,6 @@
 /// <reference types="../markedx" />
 
-import marked = require('marked')
+import { marked as MD } from 'marked'
 import {markdown2wiki, WikiRenderer} from "../md";
 
 
@@ -205,7 +205,7 @@ test( 'markdown test 0', /*async*/ () => {
 })
 
     test.skip( 'marked customization test', () => {
-        type Blockquote = marked.Tokens.Blockquote
+        type Blockquote = MD.Tokens.Blockquote
 
         const mytokenizer = { 
 
@@ -219,16 +219,19 @@ test( 'markdown test 0', /*async*/ () => {
                 if( rxResult ) {
 
                     lines[0] = `{${rxResult[1]}|title=${rxResult[2]}}`         
-                    
+
                     const decreaseQuoteLevel = (l:string) => {
                         const r = /(\s*>)(.*)/g.exec(l)
                         return (r) ? r[2] : l
                     }
-
+            
+                    const text = lines.map( decreaseQuoteLevel ).join('\n')
+                            
                     return {
                         type: 'blockquote',
                         raw: src,
-                        text: lines.map( decreaseQuoteLevel ).join('\n')
+                        text: text,
+                        tokens: MD.lexer( text )
                     } 
                 }
 
@@ -237,11 +240,11 @@ test( 'markdown test 0', /*async*/ () => {
     
         }
 
-        marked.use( {
+        MD.use( {
             tokenizer: <any>mytokenizer
         })
 
-        const result =  marked(infoNoticeblock.toString(), { 
+        const result =  MD.parse(infoNoticeblock.toString(), { 
             renderer: new WikiRenderer( {} )
             
         })
