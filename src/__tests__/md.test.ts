@@ -1,5 +1,3 @@
-/// <reference types="../markedx" />
-
 import { marked as MD } from 'marked'
 import {markdown2wiki, WikiRenderer} from "../md";
 

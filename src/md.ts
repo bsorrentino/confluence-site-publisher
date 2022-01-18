@@ -1,5 +1,3 @@
-/// <reference types="./marked" />
-
 import { marked as MD } from 'marked'
 
 type Blockquote = MD.Tokens.Blockquote
