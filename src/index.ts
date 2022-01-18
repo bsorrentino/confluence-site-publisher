@@ -2,22 +2,21 @@
 import {create as XMLRPCConfluenceCreate } from "./confluence-xmlrpc";
 import {create as RESTConfluenceCreate } from "./confluence-rest";
 import {SiteProcessor} from "./confluence-site";
-import {rxConfig, restMatcher, resetCredentials} from "./config";
+import { restMatcher, resetCredentials, createOrUpdateConfig, printConfig} from "./config";
 import { ConfigItem, PathSuffix } from './confluence';
 
 import * as URL from "url";
 import * as path from "path";
 import * as fs from "fs";
-import * as util from "util";
-import chalk from "chalk";
+import * as util from "util"
 
-import request = require("request");
-
-import minimist from "minimist";
+import chalk = require("chalk")
+import request = require("request")
+import minimist = require('minimist')
 
 import { Observable, Observer, of, from, bindNodeCallback, combineLatest } from 'rxjs';
-import { flatMap, map, tap, filter, reduce, mergeMap } from 'rxjs/operators';
-import { Config, Credentials, ConfluenceService } from "./confluence";
+import { map, tap, filter, reduce, mergeMap } from 'rxjs/operators';
+import { Credentials, ConfluenceService } from "./confluence";
 import { XMLSiteProcessor } from "./confluence-site-xml";
 import { YAMLSiteProcessor } from "./confluence-site-yml";
 
@@ -52,9 +51,9 @@ export function deploy() {
     .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
     //.map( (logo) => args['config'] || false )
     //.doOnNext( (v) => console.log( "force config", v, args))
-    .pipe( mergeMap( () => rxConfig( 'serverid', args['config'] || false ) ))
-    .pipe( flatMap( ([config,credentials]) => rxConfluenceConnection( config, credentials  ) ))
-    .pipe( flatMap( ([confluence,config]) => rxGenerateSite( config, confluence ) ))
+    .pipe( mergeMap( () => createOrUpdateConfig( 'serverid', args['config'] || false ) ))
+    .pipe( mergeMap( ([config,credentials]) => rxConfluenceConnection( config, credentials  ) ))
+    .pipe( mergeMap( ([confluence,config]) => rxGenerateSite( config, confluence ) ))
     .subscribe(
       //(result) => console.dir( result, {depth:2} ),
       () => {},
@@ -69,46 +68,44 @@ export function deploy() {
 export function reset() {
   rxFiglet( LOGO, undefined )
   .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-  .pipe( flatMap( () => from(resetCredentials(args['serverid']))  ))
-  .subscribe(
-    ()=> {},
-    (err)=> console.error( chalk.red(err) )
-  );
+  .pipe( mergeMap( () => from(resetCredentials(args['serverid']))  ))
+  .subscribe({ 
+    error: (err)=> console.error( chalk.red(err) ) 
+  })
 
 }
 
 export function init() {
     rxFiglet( LOGO, undefined )
     .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-    .pipe( flatMap( () => rxConfig( args['serverid'], true, ) ))
-    .subscribe(
-      ()=> {},
-      (err)=> console.error( chalk.red(err) )
-    );
+    .pipe( mergeMap( () => createOrUpdateConfig( args['serverid'], true, ) ))
+    .subscribe({ 
+      error: (err)=> console.error( chalk.red(err) ) 
+    })
 
 }
 
 export function info() {
     rxFiglet( LOGO, undefined )
     .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-    .pipe( flatMap( () => rxConfig( 'show', false ) ))
-    .subscribe(
-      ()=> {},
-      (err)=> console.error( chalk.red(err) )
-    );
-
+    .pipe( mergeMap( () => printConfig() ))
+    .subscribe( {
+      next: (cfg) => console.log(cfg),  
+      error: (err)=> console.error( chalk.red(err) )
+    })
+    
 }
 
 export function remove() {
     rxFiglet( LOGO, undefined )
     .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-    .pipe( mergeMap( () => rxConfig( 'delete', false) ))
+    .pipe( mergeMap( () => createOrUpdateConfig( 'delete', false) ))
     .pipe( mergeMap( (result) => rxConfluenceConnection( result[0], result[1]  ) ))
     .pipe( mergeMap( (result) => rxDelete( result[0], result[1] ) ))
-    .subscribe(
-      (value)=> { console.log( '# page(s) removed ', value )},
-      (err)=> console.error( chalk.red(err) )
-    ); 
+    .subscribe({
+      next: (value)=> { console.log( '# page(s) removed ', value )},
+      error: (err)=> console.error( chalk.red(err) )
+    }) 
 }
 
 
@@ -144,24 +141,13 @@ export function download( pageId:string, fileName:string, isStorageFormat = true
 
   rxFiglet( LOGO, undefined )
   .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-  .pipe( flatMap( () => rxConfig( "download", false ) ))
-  .pipe(  flatMap( ([config,credentials]) => rxRequest( config, credentials) ))
-  .subscribe( 
-    (res) => {
-      console.log(res)
-     } ,
-    err => console.error( chalk.red(err) )
-  );
-/*
-  .flatMap( ([config,credentials]) => rxConfluenceConnection( config, credentials ) )
-  .flatMap( ([confluence,config]) => Rx.Observable.fromPromise( confluence.getPageById( pageId )) )
-    .subscribe( 
-      (res) => {
-        console.log(res.title)
-       } ,
-      err => console.error( chalk.red(err) )
-    );
- */
+  .pipe( mergeMap( () => createOrUpdateConfig( "download", false ) ))
+  .pipe(  mergeMap( ([config,credentials]) => rxRequest( config, credentials) ))
+  .subscribe({
+      next: (res) => console.log(res),
+      error: err => console.error( chalk.red(err) )
+  })
+
   }
 } // end namespace command
 
@@ -329,7 +315,7 @@ function rxDelete( confluence:ConfluenceService, config:ConfigItem  ):Observable
     return combineLatest( rxParentPage, rxParseSite, 
             (parent,home) => [parent,home] as [Model.Page,Array<Object>])
               //.doOnNext( (result) => console.dir( result ) )
-              .pipe( flatMap( (result) => {
+              .pipe( mergeMap( (result) => {
                 
                 const [parent,page] = result;
                 const attrs = site.attributes( page );
@@ -338,16 +324,16 @@ function rxDelete( confluence:ConfluenceService, config:ConfigItem  ):Observable
 
                 return getHome
                         .pipe( filter( (home) => home!=null ) )
-                        .pipe( flatMap( (home) => 
+                        .pipe( mergeMap( (home) => 
                               from(confluence.getDescendents( home.id as string))
-                                        .pipe( flatMap( summaries => from(summaries) ))
-                                        .pipe( flatMap( (page:Model.PageSummary) => 
+                                        .pipe( mergeMap( summaries => from(summaries) ))
+                                        .pipe( mergeMap( (page:Model.PageSummary) => 
                                                 from(confluence.removePageById( page.id as string))
                                                 .pipe( tap( r => console.log( "page:", page.title, "removed!", r )) )
                                                 .pipe( map( () => 1))
                                                 ))
                                         .pipe( reduce( ( acc ) => ++acc, 0 ))
-                                        .pipe( flatMap( n => 
+                                        .pipe( mergeMap( n => 
                                               from(confluence.removePageById(home.id as string) )
                                                               .pipe( tap( (r) => console.log( "page:", home.title, "removed!", r )))
                                                               .pipe( map( () => ++n ) )
@@ -371,4 +357,3 @@ function rxGenerateSite( config:ConfigItem, confluence:ConfluenceService ):Obser
     ;
 
 }
-

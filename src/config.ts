@@ -10,13 +10,16 @@ import * as inquirer from 'inquirer';
 
 import Preferences = require('preferences');
 
-import { Config, ConfigItem, Credentials, PathSuffix } from './confluence';
+import { Config, ConfigItem, ConfigItemAndCredentials, PathSuffix } from './confluence';
 
-export type ConfigAndCredentials = [ConfigItem,Credentials];
+
 
 const CONFIG_FILE       = 'config.json';
 const SITE_PATH         = 'site.xml'
-
+const CREDENTIALS_EMPTY = {
+    username:'',
+    password:''
+}
 const fs_delete = util.promisify( fs.unlink );
 const fs_exists = util.promisify( fs.exists );
 const fs_writeFile = util.promisify( fs.writeFile );
@@ -140,17 +143,17 @@ function version():[string,string] {
     }
 }
 
-function printConfig( value:ConfigAndCredentials) {
+function printConfigItem( value:ConfigItemAndCredentials) {
 
     let [cfg, crd] = value ;
 
     let out = [
-         version(),
+         //version(),
+         ['serverid:\t',                     String(cfg.serverId)],
          ['site path:\t',                    cfg.sitePath],
          ['confluence url:\t',               ConfigUtils.Url.format(cfg)],
          ['confluence space id:',            cfg.spaceId],
          ['confluence parent page:',         cfg.parentPageTitle],
-         ['serverid:\t',                     String(cfg.serverId)],
          ['confluence username:',            crd.username || '<not set>'],
          ['confluence password:',            ConfigUtils.maskPassword(crd.password)]
 
@@ -187,18 +190,48 @@ export async function resetCredentials( serverId:string ):Promise<void> {
 
 }
 
+export async function printConfig( serverId?:string ):Promise<void> {
+
+    const configPath = path.join(process.cwd(), CONFIG_FILE);
+
+    if( await fs_exists( configPath ) ) {
+        let config = require( path.join( process.cwd(), CONFIG_FILE) ) as Config
+
+        if( serverId ) {
+            let defaultCredentials = new Preferences( serverId, CREDENTIALS_EMPTY ) 
+                const configItem = config[serverId] 
+            if( configItem ) {
+                printConfigItem( [ configItem, defaultCredentials ] )
+            }   
+            else {
+                throw new Error( `serverId ${serverId} in config file '${CONFIG_FILE} not found!`)
+            }  
+        }
+        else {
+            Object.values(config).forEach( ( configItem ) => {
+                let defaultCredentials = new Preferences( configItem.serverId, CREDENTIALS_EMPTY )
+                printConfigItem( [ configItem, defaultCredentials ] )
+            })
+            
+        }
+    }
+    else {
+        throw new Error( `config file '${CONFIG_FILE} not found`)
+    }
+}
+
 /**
  *
  */
-export async function rxConfig( serverId:string, force:boolean ):Promise<ConfigAndCredentials> {
+export async function createOrUpdateConfig( serverId:string, force:boolean ):Promise<ConfigItemAndCredentials> {
 
     const configPath = path.join(process.cwd(), CONFIG_FILE);
     
     let config:Config = {} 
     let defaultConfig:ConfigItem = {
-        host:'',
+        host:'localhost',
         path:'',
-        port:-1,
+        port:80,
         protocol:'http',
         spaceId:'',
         parentPageTitle:'Home',
@@ -206,10 +239,7 @@ export async function rxConfig( serverId:string, force:boolean ):Promise<ConfigA
         serverId:serverId
     }
 
-    let defaultCredentials = new Preferences( serverId, {
-        username:'',
-        password:''
-    }) 
+    let defaultCredentials = new Preferences( serverId, CREDENTIALS_EMPTY) 
 
     if( await fs_exists( configPath ) ) {
         config = require( path.join( process.cwd(), CONFIG_FILE) ) as Config
@@ -218,7 +248,6 @@ export async function rxConfig( serverId:string, force:boolean ):Promise<ConfigA
         if( configItem && !force) {
             return [ configItem, defaultCredentials ]
         } 
-        defaultConfig = configItem
     }
 
     console.log( chalk.green('>'), chalk.bold('serverId:'), chalk.cyan(serverId) );
@@ -229,10 +258,11 @@ export async function rxConfig( serverId:string, force:boolean ):Promise<ConfigA
                 name: 'sitePath',
                 message: 'site relative path',
                 default: defaultConfig.sitePath,
-                validate: ( value ) => {
+                validate: async ( value ) => {
                     const exists = util.promisify( fs.exists );
 
-                    return exists( path.join( process.cwd(), value ));
+                    const valid = await exists( path.join( process.cwd(), value ));
+                    return (valid) ? true : `file doesn't exist!`;
                 }
             },
             {
@@ -241,9 +271,9 @@ export async function rxConfig( serverId:string, force:boolean ):Promise<ConfigA
                 message: 'confluence url:',
                 default: ConfigUtils.Url.format( defaultConfig ),
                 validate: ( value ) => {
-                        let p = url.parse(value);
+                        const p = url.parse(value);
                         //console.log( 'parsed url', p );
-                        let valid = (p.protocol && p.host  && ConfigUtils.Port.isValid(p.port as string) );
+                        const valid = (p.protocol && p.host  && ConfigUtils.Port.isValid(p.port as string) );
                         return (valid) ? true : 'url is not valid!';
                     }
             },
@@ -312,9 +342,6 @@ export async function rxConfig( serverId:string, force:boolean ):Promise<ConfigA
     const c = new Preferences(serverId, defaultCredentials );
     c.username = answers['username']
     c.password = answers['password'];
-
-    //console.dir( config );
-    //console.dir( answers );
 
     config[serverId] = configItem
 

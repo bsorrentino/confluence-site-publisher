@@ -47,6 +47,7 @@ interface Credentials {
   password:string;
 }
 
+export type ConfigItemAndCredentials = [ConfigItem,Credentials];
 
 interface ConfluenceService {
 
