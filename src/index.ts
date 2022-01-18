@@ -3,7 +3,7 @@ import {create as XMLRPCConfluenceCreate } from "./confluence-xmlrpc";
 import {create as RESTConfluenceCreate } from "./confluence-rest";
 import {SiteProcessor} from "./confluence-site";
 import {rxConfig, restMatcher, resetCredentials} from "./config";
-import { PathSuffix } from './confluence';
+import { ConfigItem, PathSuffix } from './confluence';
 
 import * as URL from "url";
 import * as path from "path";
@@ -16,7 +16,7 @@ import request = require("request");
 import minimist from "minimist";
 
 import { Observable, Observer, of, from, bindNodeCallback, combineLatest } from 'rxjs';
-import { flatMap, map, tap, filter, reduce } from 'rxjs/operators';
+import { flatMap, map, tap, filter, reduce, mergeMap } from 'rxjs/operators';
 import { Config, Credentials, ConfluenceService } from "./confluence";
 import { XMLSiteProcessor } from "./confluence-site-xml";
 import { YAMLSiteProcessor } from "./confluence-site-yml";
@@ -52,7 +52,7 @@ export function deploy() {
     .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
     //.map( (logo) => args['config'] || false )
     //.doOnNext( (v) => console.log( "force config", v, args))
-    .pipe( flatMap( () => rxConfig(args['config'] || false ) ))
+    .pipe( mergeMap( () => rxConfig( 'serverid', args['config'] || false ) ))
     .pipe( flatMap( ([config,credentials]) => rxConfluenceConnection( config, credentials  ) ))
     .pipe( flatMap( ([confluence,config]) => rxGenerateSite( config, confluence ) ))
     .subscribe(
@@ -80,7 +80,7 @@ export function reset() {
 export function init() {
     rxFiglet( LOGO, undefined )
     .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-    .pipe( flatMap( () => rxConfig( true, args['serverid']) ))
+    .pipe( flatMap( () => rxConfig( args['serverid'], true, ) ))
     .subscribe(
       ()=> {},
       (err)=> console.error( chalk.red(err) )
@@ -91,7 +91,7 @@ export function init() {
 export function info() {
     rxFiglet( LOGO, undefined )
     .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-    .pipe( flatMap( () => rxConfig( false ) ))
+    .pipe( flatMap( () => rxConfig( 'show', false ) ))
     .subscribe(
       ()=> {},
       (err)=> console.error( chalk.red(err) )
@@ -102,9 +102,9 @@ export function info() {
 export function remove() {
     rxFiglet( LOGO, undefined )
     .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-    .pipe( flatMap( () => rxConfig(false) ))
-    .pipe( flatMap( (result) => rxConfluenceConnection( result[0], result[1]  ) ))
-    .pipe( flatMap( (result) => rxDelete( result[0], result[1] ) ))
+    .pipe( mergeMap( () => rxConfig( 'delete', false) ))
+    .pipe( mergeMap( (result) => rxConfluenceConnection( result[0], result[1]  ) ))
+    .pipe( mergeMap( (result) => rxDelete( result[0], result[1] ) ))
     .subscribe(
       (value)=> { console.log( '# page(s) removed ', value )},
       (err)=> console.error( chalk.red(err) )
@@ -114,7 +114,7 @@ export function remove() {
 
 export function download( pageId:string, fileName:string, isStorageFormat = true ) {
 
-  function rxRequest( config:Config, credentials:Credentials ):Observable<string> {
+  function rxRequest( config:ConfigItem, credentials:Credentials ):Observable<string> {
     return Observable.create( (observer:Observer<string>) => {
 
       let pathname = isStorageFormat ?
@@ -144,7 +144,7 @@ export function download( pageId:string, fileName:string, isStorageFormat = true
 
   rxFiglet( LOGO, undefined )
   .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-  .pipe( flatMap( () => rxConfig( false ) ))
+  .pipe( flatMap( () => rxConfig( "download", false ) ))
   .pipe(  flatMap( ([config,credentials]) => rxRequest( config, credentials) ))
   .subscribe( 
     (res) => {
@@ -247,7 +247,7 @@ ${chalk.cyan('Options:')}
 /**
  * 
  */
-function newSiteProcessor( confluence:ConfluenceService, config:Config ):SiteProcessor<any> {
+function newSiteProcessor( confluence:ConfluenceService, config:ConfigItem ):SiteProcessor<any> {
 
     const ext = path.extname( path.basename( config.sitePath ) );
 
@@ -281,8 +281,8 @@ function newSiteProcessor( confluence:ConfluenceService, config:Config ):SitePro
  * 
  */
 function rxConfluenceConnection(
-                config:Config,
-                credentials:Credentials ):Observable<[ConfluenceService,Config]>
+                config:ConfigItem,
+                credentials:Credentials ):Observable<[ConfluenceService,ConfigItem]>
 {
 
       let rxConnection:Promise<ConfluenceService>;
@@ -309,14 +309,14 @@ function rxConfluenceConnection(
       }
       
       return combineLatest( rxConnection, of( config ), 
-                (conn, conf) => { return [conn, conf] as [ConfluenceService,Config]; } );
+                (conn, conf) => { return [conn, conf] as [ConfluenceService,ConfigItem]; } );
 
 }
 
 /**
  * 
  */
-function rxDelete( confluence:ConfluenceService, config:Config  ):Observable<number> {
+function rxDelete( confluence:ConfluenceService, config:ConfigItem  ):Observable<number> {
     //let recursive = args['recursive'] || false;
 
     let siteFile = path.basename( config.sitePath );
@@ -361,7 +361,7 @@ function rxDelete( confluence:ConfluenceService, config:Config  ):Observable<num
 /**
  * 
  */
-function rxGenerateSite( config:Config, confluence:ConfluenceService ):Observable<any> {
+function rxGenerateSite( config:ConfigItem, confluence:ConfluenceService ):Observable<any> {
 
     const siteFile = path.basename( config.sitePath );
 

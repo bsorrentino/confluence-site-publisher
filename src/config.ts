@@ -10,17 +10,16 @@ import * as inquirer from 'inquirer';
 
 import Preferences = require('preferences');
 
-import { Observable, Observer, throwError, of, from } from 'rxjs';
-import { flatMap, map, tap } from 'rxjs/operators';
-import { Config, Credentials, PathSuffix } from './confluence';
+import { Config, ConfigItem, Credentials, PathSuffix } from './confluence';
 
-export type ConfigAndCredentials = [Config,Credentials];
+export type ConfigAndCredentials = [ConfigItem,Credentials];
 
 const CONFIG_FILE       = 'config.json';
 const SITE_PATH         = 'site.xml'
 
 const fs_delete = util.promisify( fs.unlink );
 const fs_exists = util.promisify( fs.exists );
+const fs_writeFile = util.promisify( fs.writeFile );
 
 
 /**
@@ -114,7 +113,7 @@ namespace ConfigUtils {
 
     export namespace Url {
 
-        export function format( config:Config ):string {
+        export function format( config:ConfigItem ):string {
 
                 assert( !util.isNullOrUndefined(config) );
                 
@@ -191,11 +190,12 @@ export async function resetCredentials( serverId:string ):Promise<void> {
 /**
  *
  */
-export function rxConfig( force:boolean, serverId?:string ):Observable<ConfigAndCredentials> {
+export async function rxConfig( serverId:string, force:boolean ):Promise<ConfigAndCredentials> {
 
-    let configPath = path.join(process.cwd(), CONFIG_FILE);
-
-    let defaultConfig:Config = {
+    const configPath = path.join(process.cwd(), CONFIG_FILE);
+    
+    let config:Config = {} 
+    let defaultConfig:ConfigItem = {
         host:'',
         path:'',
         port:-1,
@@ -204,48 +204,26 @@ export function rxConfig( force:boolean, serverId?:string ):Observable<ConfigAnd
         parentPageTitle:'Home',
         sitePath:SITE_PATH,
         serverId:serverId
-    };
+    }
 
-    let defaultCredentials:Credentials = {
+    let defaultCredentials = new Preferences( serverId, {
         username:'',
         password:''
-    };
+    }) 
 
-    if( fs.existsSync( configPath ) ) {
+    if( await fs_exists( configPath ) ) {
+        config = require( path.join( process.cwd(), CONFIG_FILE) ) as Config
 
-        //console.log( configPath, 'found!' );
-        
-        defaultConfig = require( path.join( process.cwd(), CONFIG_FILE) );
-
-        if( force && !util.isNullOrUndefined(serverId) ) {
-            defaultConfig.serverId = serverId;
-        }
-        
-        if( util.isNullOrUndefined(defaultConfig.serverId) ) {
-            return throwError( new Error("'serverId' is not defined!"));
-        }
-
-        defaultCredentials = new Preferences( defaultConfig.serverId, defaultCredentials) ;
-
-        if( !force ) {
-
-            let data:ConfigAndCredentials = [ defaultConfig, defaultCredentials ];
-
-            return of(data)
-                    .pipe(tap( printConfig ));
-        }
-    }
-    else {
-
-        if( util.isNullOrUndefined(defaultConfig.serverId)  ) {
-            return throwError( new Error("'serverId' is not defined!"));
-        }
-        
+        const configItem = config[serverId] 
+        if( configItem && !force) {
+            return [ configItem, defaultCredentials ]
+        } 
+        defaultConfig = configItem
     }
 
-    console.log( chalk.green('>'), chalk.bold('serverId:'), chalk.cyan(defaultConfig.serverId) );
+    console.log( chalk.green('>'), chalk.bold('serverId:'), chalk.cyan(serverId) );
 
-    let answers = inquirer.prompt( [
+    let answers = await inquirer.prompt( [
             {
                 type: 'input',
                 name: 'sitePath',
@@ -314,63 +292,33 @@ export function rxConfig( force:boolean, serverId?:string ):Observable<ConfigAnd
 
         ] );
 
-    const rxCreateConfigFile = <T>( path:string, data:any, onSuccessReturn:T):Observable<T> => {
-        return Observable.create( (observer:Observer<T>) => 
-            fs.writeFile( path, data, (err) => {
-                if( err ) {
-                    observer.error(err);
-                    return;
-                }
-                observer.next( onSuccessReturn );
-                observer.complete();
-            })
-        );
-    } 
-
-    return from( answers )
-                    .pipe(map( (answers:any) => {
-                        let p = url.parse(answers['url']);
-                        
-                        let _path = normalizePath(removeSuffixFromPath(p.path || '') + (answers.suffix || '')) as string ;
-
-                        let config:Config = {
-                            path:_path,
-                            protocol:p.protocol as string,
-                            host:p.hostname as string,
-                            port:ConfigUtils.Port.value(p.port as string),
-                            spaceId:answers['spaceId'],
-                            parentPageTitle:answers['parentPageTitle'],
-                            sitePath:answers.sitePath,
-                            serverId:defaultConfig.serverId
-                        }
-                        /*
-                        let credentials:Credentials = {
-                            username:answers['username'],
-                            password:answers['password']
-                        };
-                        */
-                        let c = new Preferences(config.serverId as string, defaultCredentials );
-                        c.username = answers['username']
-                        c.password = answers['password'];
-
-                        //console.dir( config );
-                        //console.dir( answers );
-
-                        return [ config, c ] as ConfigAndCredentials;
-                    }))
-                    .pipe(flatMap( result =>
-                        rxCreateConfigFile( configPath, JSON.stringify(result[0]), result )
-                    ));
-
-}
 
 
+    let p = url.parse(answers['url']);
+    
+    let _path = normalizePath(removeSuffixFromPath(p.path || '') + (answers.suffix || '')) as string ;
 
-function main() {
-    rxConfig( true )
-    .subscribe( ( result ) => {
+    let configItem:ConfigItem = {
+        path:_path,
+        protocol:p.protocol as string,
+        host:p.hostname as string,
+        port:ConfigUtils.Port.value(p.port as string),
+        spaceId:answers['spaceId'],
+        parentPageTitle:answers['parentPageTitle'],
+        sitePath:answers.sitePath,
+        serverId:serverId
+    }
 
-        console.dir( result, {depth:2} );
-    });
+    const c = new Preferences(serverId, defaultCredentials );
+    c.username = answers['username']
+    c.password = answers['password'];
 
+    //console.dir( config );
+    //console.dir( answers );
+
+    config[serverId] = configItem
+
+    await fs_writeFile( configPath, JSON.stringify(config) )
+
+    return [ configItem, c ] 
 }

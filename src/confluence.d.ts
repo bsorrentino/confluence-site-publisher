@@ -1,7 +1,6 @@
 /// <reference types="node" />
 /// <reference path="confluence-model.d.ts" />
 
-import {UrlObject} from 'url';
 import { Stream } from 'stream';
 
 declare const enum PathSuffix {
@@ -18,15 +17,18 @@ interface BaseConfig {
   host:string,
   port:number,
   path:string,
-
 }
 
-interface Config extends BaseConfig {
+interface ConfigItem extends BaseConfig {
   spaceId:string,
   parentPageTitle:string,
   sitePath:string,
-  serverId?:string
+  serverId:string
 }
+
+type ServerId = string
+
+type Config = Record<ServerId,ConfigItem>
 
 interface ContentStorage {
   representation:Representation;
