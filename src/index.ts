@@ -9,11 +9,11 @@ import * as URL from "url";
 import * as path from "path";
 import * as fs from "fs";
 import * as util from "util";
-import * as chalk from "chalk";
+import chalk from "chalk";
 
 import request = require("request");
 
-import minimist     = require("minimist");
+import minimist from "minimist";
 
 import { Observable, Observer, of, from, bindNodeCallback, combineLatest } from 'rxjs';
 import { flatMap, map, tap, filter, reduce } from 'rxjs/operators';
