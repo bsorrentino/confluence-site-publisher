@@ -3,10 +3,10 @@
 <img src="https://img.shields.io/github/forks/bsorrentino/confluence-site-publisher.svg">&nbsp;
 <img src="https://img.shields.io/github/stars/bsorrentino/confluence-site-publisher.svg">&nbsp;
 <a href="https://github.com/bsorrentino/confluence-site-publisher/issues">
-<img src="https://img.shields.io/github/issues/bsorrentino/confluence-site-publisher.svg">
-</a>&nbsp;[![Build Status](https://travis-ci.org/bsorrentino/confluence-site-publisher.svg)](https://travis-ci.org/bsorrentino/confluence-site-publisher)
-
+<img src="https://img.shields.io/github/issues/bsorrentino/confluence-site-publisher.svg"></a>&nbsp;
+![example workflow](https://github.com/bsorrentino/confluence-site-publisher/actions/workflows/npm-publish.yml/badge.svg)
 <!--
+[![Build Status](https://travis-ci.org/bsorrentino/confluence-site-publisher.svg)](https://travis-ci.org/bsorrentino/confluence-site-publisher)
 [![Build Status](https://travis-ci.org/bsorrentino/confluence-site-publisher.svg?branch=master)](https://travis-ci.org/bsorrentino/confluence-site-publisher)
 -->
 
