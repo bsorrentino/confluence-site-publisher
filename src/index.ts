@@ -2,7 +2,7 @@
 import {create as XMLRPCConfluenceCreate } from "./confluence-xmlrpc";
 import {create as RESTConfluenceCreate } from "./confluence-rest";
 import {SiteProcessor} from "./confluence-site";
-import { restMatcher, resetCredentials, createOrUpdateConfig, printConfig} from "./config";
+import { restMatcher, resetCredentials, createOrUpdateConfig, printConfig, version} from "./config";
 import { ConfigItem, PathSuffix } from './confluence';
 
 import * as URL from "url";
@@ -48,17 +48,13 @@ export function deploy() {
   //console.dir( args );
 
   rxFiglet( LOGO, undefined )
-    .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-    //.map( (logo) => args['config'] || false )
-    //.doOnNext( (v) => console.log( "force config", v, args))
-    .pipe( mergeMap( () => createOrUpdateConfig( 'serverid', args['config'] || false ) ))
+    .pipe( tap( (logo) => console.log( chalk.magenta( `${logo}\nversion: ${version()}\n`) ) ))
+    .pipe( mergeMap( () => createOrUpdateConfig( { serverId: args['serverid'], force: args['config']  } )))
     .pipe( mergeMap( ([config,credentials]) => rxConfluenceConnection( config, credentials  ) ))
     .pipe( mergeMap( ([confluence,config]) => rxGenerateSite( config, confluence ) ))
-    .subscribe(
-      //(result) => console.dir( result, {depth:2} ),
-      () => {},
-      (err) => console.error( chalk.red(err) )
-    );
+    .subscribe({ 
+      error: (err) => console.error( chalk.red(err) )
+    })
 
 }
 
@@ -67,7 +63,7 @@ export function deploy() {
  */
 export function reset() {
   rxFiglet( LOGO, undefined )
-  .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
+  .pipe( tap( (logo) => console.log( chalk.magenta( `${logo}\nversion: ${version()}\n`) ) ))
   .pipe( mergeMap( () => from(resetCredentials(args['serverid']))  ))
   .subscribe({ 
     error: (err)=> console.error( chalk.red(err) ) 
@@ -77,8 +73,8 @@ export function reset() {
 
 export function init() {
     rxFiglet( LOGO, undefined )
-    .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-    .pipe( mergeMap( () => createOrUpdateConfig( args['serverid'], true, ) ))
+    .pipe( tap( (logo) => console.log( chalk.magenta( `${logo}\nversion: ${version()}\n`) ) ))
+    .pipe( mergeMap( () => createOrUpdateConfig( { serverId: args['serverid'], force: true  }  ) ))
     .subscribe({ 
       error: (err)=> console.error( chalk.red(err) ) 
     })
@@ -87,19 +83,18 @@ export function init() {
 
 export function info() {
     rxFiglet( LOGO, undefined )
-    .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
+    .pipe( tap( (logo) => console.log( chalk.magenta( `${logo}\nversion: ${version()}\n`) ) ))
     .pipe( mergeMap( () => printConfig() ))
-    .subscribe( {
-      next: (cfg) => console.log(cfg),  
-      error: (err)=> console.error( chalk.red(err) )
+    .subscribe( {  
+      error: (err) => console.error( chalk.red(err) )
     })
     
 }
 
 export function remove() {
     rxFiglet( LOGO, undefined )
-    .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-    .pipe( mergeMap( () => createOrUpdateConfig( 'delete', false) ))
+    .pipe( tap( (logo) => console.log( chalk.magenta( `${logo}\nversion: ${version()}\n`) ) ))
+    .pipe( mergeMap( () => createOrUpdateConfig( { serverId: args['serverid'] } ) ))
     .pipe( mergeMap( (result) => rxConfluenceConnection( result[0], result[1]  ) ))
     .pipe( mergeMap( (result) => rxDelete( result[0], result[1] ) ))
     .subscribe({
@@ -140,8 +135,8 @@ export function download( pageId:string, fileName:string, isStorageFormat = true
 
 
   rxFiglet( LOGO, undefined )
-  .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-  .pipe( mergeMap( () => createOrUpdateConfig( "download", false ) ))
+  .pipe( tap( (logo) => console.log( chalk.magenta( `${logo}\nversion: ${version()}\n`) ) ))
+  .pipe( mergeMap( () => createOrUpdateConfig( { serverId: args['serverid'] }  ) ))
   .pipe(  mergeMap( ([config,credentials]) => rxRequest( config, credentials) ))
   .subscribe({
       next: (res) => console.log(res),
@@ -206,12 +201,13 @@ function usageCommand( cmd:string, desc:string, ...args: string[]) {
 function usage() {
 
   rxFiglet( LOGO, LOGO_FONT )
-  .pipe( tap( undefined, undefined, () => process.exit(-1) ))
+  .pipe( tap( { complete: () => process.exit(-1) } ))
   .subscribe( (logo) => {
 
-    console.log( chalk.bold.magenta(logo as string),
+    console.log( chalk.magenta( `${logo}\nversion: ${version()}\n`),
 `
-${chalk.cyan('Usage:')}
+${chalk.cyan.underline('Usage:')}
+
 confluence-site 
 ${usageCommand( 'init', '\t// create/update configuration', '--serverid <serverid>' )}
 ${usageCommand( 'deploy', '\t\t// deploy site to confluence', '[--config]' )}
@@ -312,10 +308,8 @@ function rxDelete( confluence:ConfluenceService, config:ConfigItem  ):Observable
     let rxParentPage = from( confluence.getPage( config.spaceId, config.parentPageTitle) );
     let rxParseSite = site.rxParse( siteFile );
 
-    return combineLatest( rxParentPage, rxParseSite, 
-            (parent,home) => [parent,home] as [Model.Page,Array<Object>])
-              //.doOnNext( (result) => console.dir( result ) )
-              .pipe( mergeMap( (result) => {
+    return combineLatest( [rxParentPage, rxParseSite] )
+            .pipe( mergeMap( (result) => {
                 
                 const [parent,page] = result;
                 const attrs = site.attributes( page );

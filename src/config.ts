@@ -12,8 +12,6 @@ import Preferences = require('preferences');
 
 import { Config, ConfigItem, ConfigItemAndCredentials, PathSuffix } from './confluence';
 
-
-
 const CONFIG_FILE       = 'config.json';
 const SITE_PATH         = 'site.xml'
 const CREDENTIALS_EMPTY = {
@@ -102,25 +100,17 @@ namespace ConfigUtils {
 
 
     export namespace Port {
-        export function isValid(port:string|number):boolean {
-        return (util.isNullOrUndefined(port) || util.isNumber(port) || Number(port) !== NaN )
-        }
 
-        export function value( port:string|number, def:number = 80 ) {
-            assert( isValid(port) );
-
-            return ( util.isNullOrUndefined(port) ) ?  def : Number( port );
-        }
+        export const value = ( port:string|number|undefined, defaultValue:number  ) => 
+            ( port === null || port === undefined || port <= 0 ) ? defaultValue : Number( port )
 
     }
 
     export namespace Url {
 
         export function format( config:ConfigItem ):string {
-
-                assert( !util.isNullOrUndefined(config) );
                 
-                let port = util.isNull(config.port) ? '' : (config.port===80 ) ? '' : ':' + config.port
+                let port = config.port===null ? '' : (config.port===80 ) ? '' : ':' + config.port
                 return util.format( '%s//%s%s%s',
                                 config.protocol,
                                 config.host,
@@ -133,13 +123,13 @@ namespace ConfigUtils {
 
 }
 
-function version():[string,string] {
+export function version():string {
     try {
         const pkg = require( path.join(__dirname,'..', 'package.json') );
-        return ['version:\t', pkg.version] 
+        return pkg.version 
     }
     catch( e ) {
-        return ['',''];
+        return ''
     }
 }
 
@@ -194,8 +184,18 @@ export async function printConfig( serverId?:string ):Promise<void> {
 
     const configPath = path.join(process.cwd(), CONFIG_FILE);
 
+    let config:Config = {} 
+
     if( await fs_exists( configPath ) ) {
-        let config = require( path.join( process.cwd(), CONFIG_FILE) ) as Config
+
+        const cfg = require( configPath ) 
+
+        if( cfg['serverId'] !== undefined ) { // Legacy format
+            config[serverId!] = cfg
+        }
+        else {
+            config = cfg
+        }
 
         if( serverId ) {
             let defaultCredentials = new Preferences( serverId, CREDENTIALS_EMPTY ) 
@@ -216,19 +216,80 @@ export async function printConfig( serverId?:string ):Promise<void> {
         }
     }
     else {
-        throw new Error( `config file '${CONFIG_FILE} not found`)
+        throw new Error( `config file '${CONFIG_FILE} doesn't exists!`)
     }
 }
+
 
 /**
  *
  */
-export async function createOrUpdateConfig( serverId:string, force:boolean ):Promise<ConfigItemAndCredentials> {
+export async function createOrUpdateConfig( params:{ serverId?:string, force?:boolean } ):Promise<ConfigItemAndCredentials> {
 
     const configPath = path.join(process.cwd(), CONFIG_FILE);
-    
+    const configFileExists = await fs_exists( configPath )
+
+    let { serverId, force = false} = params
     let config:Config = {} 
-    let defaultConfig:ConfigItem = {
+
+    // Backward compatibility
+    if( configFileExists ) {
+        const cfg = require( configPath ) 
+
+        if( cfg['serverId'] !== undefined ) { // Legacy format
+            config[cfg['serverId']] = cfg
+        }
+        else {
+            config = cfg
+        }
+    }
+
+    if( !serverId ) {
+
+        if( !configFileExists ) {
+            throw new Error( `config file '${CONFIG_FILE} doesn't exists!`)
+        }
+
+        const serverIds = Object.keys(config)
+
+        if( serverIds.length === 0 ) {
+            throw new Error( `config file '${CONFIG_FILE} doesn't contain serverid! Add one using 'init' command`)
+        }
+
+        if( serverIds.length === 1 ) {
+            serverId = serverIds[0]
+        }
+        else {
+            const answer = await inquirer.prompt<{ serverId:string }>([
+                {
+                    type: 'list',
+                    name: 'serverId',
+                    message: 'select server id',
+                    choices: serverIds 
+                },
+       
+            ])
+    
+            serverId = answer.serverId 
+    
+        }
+    }
+
+    if( serverId === 'serverId' ) {
+        throw new Error( `'serverId' value is not valid for set 'serverId' property!`)
+    }
+
+    let defaultCredentials = new Preferences( serverId, CREDENTIALS_EMPTY) 
+
+    if( configFileExists ) {
+
+        const configItem = config[serverId] 
+        if( configItem && !force) {
+            return [ configItem, defaultCredentials ]
+        } 
+    }
+
+    const defaultConfig:ConfigItem = config[serverId] ?? {
         host:'localhost',
         path:'',
         port:80,
@@ -239,29 +300,16 @@ export async function createOrUpdateConfig( serverId:string, force:boolean ):Pro
         serverId:serverId
     }
 
-    let defaultCredentials = new Preferences( serverId, CREDENTIALS_EMPTY) 
-
-    if( await fs_exists( configPath ) ) {
-        config = require( path.join( process.cwd(), CONFIG_FILE) ) as Config
-
-        const configItem = config[serverId] 
-        if( configItem && !force) {
-            return [ configItem, defaultCredentials ]
-        } 
-    }
-
     console.log( chalk.green('>'), chalk.bold('serverId:'), chalk.cyan(serverId) );
 
-    let answers = await inquirer.prompt( [
+    const answers = await inquirer.prompt( [
             {
                 type: 'input',
                 name: 'sitePath',
                 message: 'site relative path',
                 default: defaultConfig.sitePath,
                 validate: async ( value ) => {
-                    const exists = util.promisify( fs.exists );
-
-                    const valid = await exists( path.join( process.cwd(), value ));
+                    const valid = await fs_exists( path.join( process.cwd(), value ));
                     return (valid) ? true : `file doesn't exist!`;
                 }
             },
@@ -271,19 +319,21 @@ export async function createOrUpdateConfig( serverId:string, force:boolean ):Pro
                 message: 'confluence url:',
                 default: ConfigUtils.Url.format( defaultConfig ),
                 validate: ( value ) => {
-                        const p = url.parse(value);
-                        //console.log( 'parsed url', p );
-                        const valid = (p.protocol && p.host  && ConfigUtils.Port.isValid(p.port as string) );
-                        return (valid) ? true : 'url is not valid!';
+                    try {
+                        new URL(value);
+                        return true;
+                      } catch (err) {
+                        return 'url is not valid!';
+                      }
                     }
             },
             {
                 type: 'list',
                 name: 'suffix',
                 message: 'Which protocol want to use?',
-                default: () => { 
-                    return ( defaultConfig.path.match(restMatcher) ) ? PathSuffix.REST : PathSuffix.XMLRPC;
-                },
+                default: () => 
+                    ( defaultConfig.path.match(restMatcher) ) ? PathSuffix.REST : PathSuffix.XMLRPC
+                ,
                 //when: () => !( defaultConfig.path.match(restMatcher) || defaultConfig.path.match(xmlrpcMatcher) ),
                 choices: [ 
                     { name:'xmlrpc', value:PathSuffix.XMLRPC}, 
@@ -323,16 +373,16 @@ export async function createOrUpdateConfig( serverId:string, force:boolean ):Pro
         ] );
 
 
-
-    let p = url.parse(answers['url']);
+    const { pathname = '', hostname, protocol, port } = new URL( answers['url'] )
+    // const p = url.parse(answers['url']);
     
-    let _path = normalizePath(removeSuffixFromPath(p.path || '') + (answers.suffix || '')) as string ;
+    const _path = normalizePath(removeSuffixFromPath(pathname) + (answers.suffix || '')) as string ;
 
-    let configItem:ConfigItem = {
+    const configItem:ConfigItem = {
         path:_path,
-        protocol:p.protocol as string,
-        host:p.hostname as string,
-        port:ConfigUtils.Port.value(p.port as string),
+        protocol:protocol as string,
+        host:hostname as string,
+        port:ConfigUtils.Port.value(port, (protocol==='https:' ? 443 : 80) ),
         spaceId:answers['spaceId'],
         parentPageTitle:answers['parentPageTitle'],
         sitePath:answers.sitePath,
