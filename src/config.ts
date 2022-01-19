@@ -38,11 +38,11 @@ export const xmlrpcMatcher = new RegExp( `(${PathSuffix.XMLRPC})$` );
  */
 export function normalizePath( path:string|url.UrlObject ):string|url.UrlObject {
 
-    if( util.isString(path) ) {
+    if( typeof path === 'string' ) {
         let v = path as string;
         return v.replace( /\/+/g, '/').replace(/\/+$/, '');
     }
-    if( util.isObject(path) ) {
+    if( path !== null && typeof path === 'object' ) {
         let v = path as url.UrlObject;
         if( v.pathname ) {
             v.pathname = v.pathname.replace( /\/+/g, '/').replace(/\/$/, '');
@@ -52,7 +52,12 @@ export function normalizePath( path:string|url.UrlObject ):string|url.UrlObject 
     throw new Error('input parameter is invalid!'); 
 }
 
-function removeSuffixFromPath( path:string ) {
+/**
+ * 
+ * @param path 
+ * @returns 
+ */
+export function removeSuffixFromPath( path:string ) {
     return path.replace( restMatcher, '' ).replace( xmlrpcMatcher, '');
 }
 
