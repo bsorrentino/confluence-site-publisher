@@ -10,17 +10,17 @@ import * as inquirer from 'inquirer';
 
 import Preferences = require('preferences');
 
-import { Observable, Observer, throwError, of, from } from 'rxjs';
-import { flatMap, map, tap } from 'rxjs/operators';
-import { Config, Credentials, PathSuffix } from './confluence';
-
-export type ConfigAndCredentials = [Config,Credentials];
+import { Config, ConfigItem, ConfigItemAndCredentials, PathSuffix } from './confluence';
 
 const CONFIG_FILE       = 'config.json';
 const SITE_PATH         = 'site.xml'
-
+const CREDENTIALS_EMPTY = {
+    username:'',
+    password:''
+}
 const fs_delete = util.promisify( fs.unlink );
 const fs_exists = util.promisify( fs.exists );
+const fs_writeFile = util.promisify( fs.writeFile );
 
 
 /**
@@ -38,11 +38,11 @@ export const xmlrpcMatcher = new RegExp( `(${PathSuffix.XMLRPC})$` );
  */
 export function normalizePath( path:string|url.UrlObject ):string|url.UrlObject {
 
-    if( util.isString(path) ) {
+    if( typeof path === 'string' ) {
         let v = path as string;
         return v.replace( /\/+/g, '/').replace(/\/+$/, '');
     }
-    if( util.isObject(path) ) {
+    if( path !== null && typeof path === 'object' ) {
         let v = path as url.UrlObject;
         if( v.pathname ) {
             v.pathname = v.pathname.replace( /\/+/g, '/').replace(/\/$/, '');
@@ -52,7 +52,12 @@ export function normalizePath( path:string|url.UrlObject ):string|url.UrlObject 
     throw new Error('input parameter is invalid!'); 
 }
 
-function removeSuffixFromPath( path:string ) {
+/**
+ * 
+ * @param path 
+ * @returns 
+ */
+export function removeSuffixFromPath( path:string ) {
     return path.replace( restMatcher, '' ).replace( xmlrpcMatcher, '');
 }
 
@@ -100,25 +105,17 @@ namespace ConfigUtils {
 
 
     export namespace Port {
-        export function isValid(port:string|number):boolean {
-        return (util.isNullOrUndefined(port) || util.isNumber(port) || Number(port) !== NaN )
-        }
 
-        export function value( port:string|number, def:number = 80 ) {
-            assert( isValid(port) );
-
-            return ( util.isNullOrUndefined(port) ) ?  def : Number( port );
-        }
+        export const value = ( port:string|number|undefined, defaultValue:number  ) => 
+            ( port === null || port === undefined || port <= 0 ) ? defaultValue : Number( port )
 
     }
 
     export namespace Url {
 
-        export function format( config:Config ):string {
-
-                assert( !util.isNullOrUndefined(config) );
+        export function format( config:ConfigItem ):string {
                 
-                let port = util.isNull(config.port) ? '' : (config.port===80 ) ? '' : ':' + config.port
+                let port = config.port===null ? '' : (config.port===80 ) ? '' : ':' + config.port
                 return util.format( '%s//%s%s%s',
                                 config.protocol,
                                 config.host,
@@ -131,27 +128,27 @@ namespace ConfigUtils {
 
 }
 
-function version():[string,string] {
+export function version():string {
     try {
         const pkg = require( path.join(__dirname,'..', 'package.json') );
-        return ['version:\t', pkg.version] 
+        return pkg.version 
     }
     catch( e ) {
-        return ['',''];
+        return ''
     }
 }
 
-function printConfig( value:ConfigAndCredentials) {
+function printConfigItem( value:ConfigItemAndCredentials) {
 
     let [cfg, crd] = value ;
 
     let out = [
-         version(),
+         //version(),
+         ['serverid:\t',                     String(cfg.serverId)],
          ['site path:\t',                    cfg.sitePath],
          ['confluence url:\t',               ConfigUtils.Url.format(cfg)],
          ['confluence space id:',            cfg.spaceId],
          ['confluence parent page:',         cfg.parentPageTitle],
-         ['serverid:\t',                     String(cfg.serverId)],
          ['confluence username:',            crd.username || '<not set>'],
          ['confluence password:',            ConfigUtils.maskPassword(crd.password)]
 
@@ -188,73 +185,137 @@ export async function resetCredentials( serverId:string ):Promise<void> {
 
 }
 
+export async function printConfig( serverId?:string ):Promise<void> {
+
+    const configPath = path.join(process.cwd(), CONFIG_FILE);
+
+    let config:Config = {} 
+
+    if( await fs_exists( configPath ) ) {
+
+        const cfg = require( configPath ) 
+
+        if( cfg['serverId'] !== undefined ) { // Legacy format
+            config[serverId!] = cfg
+        }
+        else {
+            config = cfg
+        }
+
+        if( serverId ) {
+            let defaultCredentials = new Preferences( serverId, CREDENTIALS_EMPTY ) 
+                const configItem = config[serverId] 
+            if( configItem ) {
+                printConfigItem( [ configItem, defaultCredentials ] )
+            }   
+            else {
+                throw new Error( `serverId ${serverId} in config file '${CONFIG_FILE} not found!`)
+            }  
+        }
+        else {
+            Object.values(config).forEach( ( configItem ) => {
+                let defaultCredentials = new Preferences( configItem.serverId, CREDENTIALS_EMPTY )
+                printConfigItem( [ configItem, defaultCredentials ] )
+            })
+            
+        }
+    }
+    else {
+        throw new Error( `config file '${CONFIG_FILE} doesn't exists!`)
+    }
+}
+
+
 /**
  *
  */
-export function rxConfig( force:boolean, serverId?:string ):Observable<ConfigAndCredentials> {
+export async function createOrUpdateConfig( params:{ serverId?:string, force?:boolean } ):Promise<ConfigItemAndCredentials> {
 
-    let configPath = path.join(process.cwd(), CONFIG_FILE);
+    const configPath = path.join(process.cwd(), CONFIG_FILE);
+    const configFileExists = await fs_exists( configPath )
 
-    let defaultConfig:Config = {
-        host:'',
+    let { serverId, force = false} = params
+    let config:Config = {} 
+
+    // Backward compatibility
+    if( configFileExists ) {
+        const cfg = require( configPath ) 
+
+        if( cfg['serverId'] !== undefined ) { // Legacy format
+            config[cfg['serverId']] = cfg
+        }
+        else {
+            config = cfg
+        }
+    }
+
+    if( !serverId ) {
+
+        if( !configFileExists ) {
+            throw new Error( `config file '${CONFIG_FILE} doesn't exists!`)
+        }
+
+        const serverIds = Object.keys(config)
+
+        if( serverIds.length === 0 ) {
+            throw new Error( `config file '${CONFIG_FILE} doesn't contain serverid! Add one using 'init' command`)
+        }
+
+        if( serverIds.length === 1 ) {
+            serverId = serverIds[0]
+        }
+        else {
+            const answer = await inquirer.prompt<{ serverId:string }>([
+                {
+                    type: 'list',
+                    name: 'serverId',
+                    message: 'select server id',
+                    choices: serverIds 
+                },
+       
+            ])
+    
+            serverId = answer.serverId 
+    
+        }
+    }
+
+    if( serverId === 'serverId' ) {
+        throw new Error( `'serverId' value is not valid for set 'serverId' property!`)
+    }
+
+    let defaultCredentials = new Preferences( serverId, CREDENTIALS_EMPTY) 
+
+    if( configFileExists ) {
+
+        const configItem = config[serverId] 
+        if( configItem && !force) {
+            return [ configItem, defaultCredentials ]
+        } 
+    }
+
+    const defaultConfig:ConfigItem = config[serverId] ?? {
+        host:'localhost',
         path:'',
-        port:-1,
+        port:80,
         protocol:'http',
         spaceId:'',
         parentPageTitle:'Home',
         sitePath:SITE_PATH,
         serverId:serverId
-    };
-
-    let defaultCredentials:Credentials = {
-        username:'',
-        password:''
-    };
-
-    if( fs.existsSync( configPath ) ) {
-
-        //console.log( configPath, 'found!' );
-        
-        defaultConfig = require( path.join( process.cwd(), CONFIG_FILE) );
-
-        if( force && !util.isNullOrUndefined(serverId) ) {
-            defaultConfig.serverId = serverId;
-        }
-        
-        if( util.isNullOrUndefined(defaultConfig.serverId) ) {
-            return throwError( new Error("'serverId' is not defined!"));
-        }
-
-        defaultCredentials = new Preferences( defaultConfig.serverId, defaultCredentials) ;
-
-        if( !force ) {
-
-            let data:ConfigAndCredentials = [ defaultConfig, defaultCredentials ];
-
-            return of(data)
-                    .pipe(tap( printConfig ));
-        }
-    }
-    else {
-
-        if( util.isNullOrUndefined(defaultConfig.serverId)  ) {
-            return throwError( new Error("'serverId' is not defined!"));
-        }
-        
     }
 
-    console.log( chalk.green('>'), chalk.bold('serverId:'), chalk.cyan(defaultConfig.serverId) );
+    console.log( chalk.green('>'), chalk.bold('serverId:'), chalk.cyan(serverId) );
 
-    let answers = inquirer.prompt( [
+    const answers = await inquirer.prompt( [
             {
                 type: 'input',
                 name: 'sitePath',
                 message: 'site relative path',
                 default: defaultConfig.sitePath,
-                validate: ( value ) => {
-                    const exists = util.promisify( fs.exists );
-
-                    return exists( path.join( process.cwd(), value ));
+                validate: async ( value ) => {
+                    const valid = await fs_exists( path.join( process.cwd(), value ));
+                    return (valid) ? true : `file doesn't exist!`;
                 }
             },
             {
@@ -263,19 +324,21 @@ export function rxConfig( force:boolean, serverId?:string ):Observable<ConfigAnd
                 message: 'confluence url:',
                 default: ConfigUtils.Url.format( defaultConfig ),
                 validate: ( value ) => {
-                        let p = url.parse(value);
-                        //console.log( 'parsed url', p );
-                        let valid = (p.protocol && p.host  && ConfigUtils.Port.isValid(p.port as string) );
-                        return (valid) ? true : 'url is not valid!';
+                    try {
+                        new URL(value);
+                        return true;
+                      } catch (err) {
+                        return 'url is not valid!';
+                      }
                     }
             },
             {
                 type: 'list',
                 name: 'suffix',
                 message: 'Which protocol want to use?',
-                default: () => { 
-                    return ( defaultConfig.path.match(restMatcher) ) ? PathSuffix.REST : PathSuffix.XMLRPC;
-                },
+                default: () => 
+                    ( defaultConfig.path.match(restMatcher) ) ? PathSuffix.REST : PathSuffix.XMLRPC
+                ,
                 //when: () => !( defaultConfig.path.match(restMatcher) || defaultConfig.path.match(xmlrpcMatcher) ),
                 choices: [ 
                     { name:'xmlrpc', value:PathSuffix.XMLRPC}, 
@@ -314,63 +377,30 @@ export function rxConfig( force:boolean, serverId?:string ):Observable<ConfigAnd
 
         ] );
 
-    const rxCreateConfigFile = <T>( path:string, data:any, onSuccessReturn:T):Observable<T> => {
-        return Observable.create( (observer:Observer<T>) => 
-            fs.writeFile( path, data, (err) => {
-                if( err ) {
-                    observer.error(err);
-                    return;
-                }
-                observer.next( onSuccessReturn );
-                observer.complete();
-            })
-        );
-    } 
 
-    return from( answers )
-                    .pipe(map( (answers:any) => {
-                        let p = url.parse(answers['url']);
-                        
-                        let _path = normalizePath(removeSuffixFromPath(p.path || '') + (answers.suffix || '')) as string ;
+    const { pathname = '', hostname, protocol, port } = new URL( answers['url'] )
+    // const p = url.parse(answers['url']);
+    
+    const _path = normalizePath(removeSuffixFromPath(pathname) + (answers.suffix || '')) as string ;
 
-                        let config:Config = {
-                            path:_path,
-                            protocol:p.protocol as string,
-                            host:p.hostname as string,
-                            port:ConfigUtils.Port.value(p.port as string),
-                            spaceId:answers['spaceId'],
-                            parentPageTitle:answers['parentPageTitle'],
-                            sitePath:answers.sitePath,
-                            serverId:defaultConfig.serverId
-                        }
-                        /*
-                        let credentials:Credentials = {
-                            username:answers['username'],
-                            password:answers['password']
-                        };
-                        */
-                        let c = new Preferences(config.serverId as string, defaultCredentials );
-                        c.username = answers['username']
-                        c.password = answers['password'];
+    const configItem:ConfigItem = {
+        path:_path,
+        protocol:protocol as string,
+        host:hostname as string,
+        port:ConfigUtils.Port.value(port, (protocol==='https:' ? 443 : 80) ),
+        spaceId:answers['spaceId'],
+        parentPageTitle:answers['parentPageTitle'],
+        sitePath:answers.sitePath,
+        serverId:serverId
+    }
 
-                        //console.dir( config );
-                        //console.dir( answers );
+    const c = new Preferences(serverId, defaultCredentials );
+    c.username = answers['username']
+    c.password = answers['password'];
 
-                        return [ config, c ] as ConfigAndCredentials;
-                    }))
-                    .pipe(flatMap( result =>
-                        rxCreateConfigFile( configPath, JSON.stringify(result[0]), result )
-                    ));
+    config[serverId] = configItem
 
-}
+    await fs_writeFile( configPath, JSON.stringify(config) )
 
-
-
-function main() {
-    rxConfig( true )
-    .subscribe( ( result ) => {
-
-        console.dir( result, {depth:2} );
-    });
-
+    return [ configItem, c ] 
 }

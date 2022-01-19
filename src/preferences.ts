@@ -1,6 +1,6 @@
 /// <reference path="preferences.d.ts" />
 
-import Preferences = require("preferences");
+import Preferences from "preferences";
  
 interface MyData {
         data: { url:string, info?:string, cycle:number }

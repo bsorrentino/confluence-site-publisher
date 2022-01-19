@@ -1,8 +1,0 @@
-typings/
-config*.json
-.vscode
-src/
-.travis.yml
-tsconfig.json
-typings.json
-

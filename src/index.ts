@@ -2,22 +2,21 @@
 import {create as XMLRPCConfluenceCreate } from "./confluence-xmlrpc";
 import {create as RESTConfluenceCreate } from "./confluence-rest";
 import {SiteProcessor} from "./confluence-site";
-import {rxConfig, restMatcher, resetCredentials} from "./config";
-import { PathSuffix } from './confluence';
+import { restMatcher, resetCredentials, createOrUpdateConfig, printConfig, version, removeSuffixFromPath} from "./config";
+import { ConfigItem, PathSuffix } from './confluence';
 
 import * as URL from "url";
 import * as path from "path";
 import * as fs from "fs";
-import * as util from "util";
-import * as chalk from "chalk";
+import * as util from "util"
 
-import request = require("request");
-
-import minimist     = require("minimist");
+import chalk = require("chalk")
+import request = require("request")
+import minimist = require('minimist')
 
 import { Observable, Observer, of, from, bindNodeCallback, combineLatest } from 'rxjs';
-import { flatMap, map, tap, filter, reduce } from 'rxjs/operators';
-import { Config, Credentials, ConfluenceService } from "./confluence";
+import { map, tap, filter, reduce, mergeMap, mergeAll } from 'rxjs/operators';
+import { Credentials, ConfluenceService } from "./confluence";
 import { XMLSiteProcessor } from "./confluence-site-xml";
 import { YAMLSiteProcessor } from "./confluence-site-yml";
 
@@ -32,12 +31,30 @@ const figlet:Figlet = require('figlet');
 const LOGO      = 'Confluence Site';
 const LOGO_FONT = 'Stick Letters';
 
-let rxFiglet = bindNodeCallback( figlet );
+const rxFiglet = bindNodeCallback( figlet );
 
-let argv = process.argv.slice(2);
+const argv = process.argv.slice(2);
 
-let args = minimist( argv, {} );
+const args = minimist( argv, {} );
 
+/**
+ * CLEAR SCREEN
+ */
+ function clrscr() {
+  //process.stdout.write('\033c');
+  process.stdout.write('\x1Bc');
+
+}
+
+/**
+ * 
+ */
+function usageCommand( cmd:string, desc:string, ...args: string[]) {
+  desc = chalk.italic.gray(desc);
+  return args.reduce( (previousValue, currentValue)=> {
+    return util.format( "%s %s", previousValue, chalk.yellow(currentValue) );
+  }, '\n' + cmd ) + desc;
+}
 
 namespace commands {
 
@@ -49,17 +66,13 @@ export function deploy() {
   //console.dir( args );
 
   rxFiglet( LOGO, undefined )
-    .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-    //.map( (logo) => args['config'] || false )
-    //.doOnNext( (v) => console.log( "force config", v, args))
-    .pipe( flatMap( () => rxConfig(args['config'] || false ) ))
-    .pipe( flatMap( ([config,credentials]) => rxConfluenceConnection( config, credentials  ) ))
-    .pipe( flatMap( ([confluence,config]) => rxGenerateSite( config, confluence ) ))
-    .subscribe(
-      //(result) => console.dir( result, {depth:2} ),
-      () => {},
-      (err) => console.error( chalk.red(err) )
-    );
+    .pipe( tap( (logo) => console.log( chalk.magenta( `${logo}\nversion: ${version()}\n`) ) ))
+    .pipe( mergeMap( () => createOrUpdateConfig( { serverId: args['serverid'], force: args['config']  } )))
+    .pipe( mergeMap( ([config,credentials]) => rxConfluenceConnection( config, credentials  ) ))
+    .pipe( mergeMap( ([confluence,config]) => rxGenerateSite( config, confluence ) ))
+    .subscribe({ 
+      error: (err) => console.error( chalk.red(err) )
+    })
 
 }
 
@@ -68,72 +81,75 @@ export function deploy() {
  */
 export function reset() {
   rxFiglet( LOGO, undefined )
-  .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-  .pipe( flatMap( () => from(resetCredentials(args['serverid']))  ))
-  .subscribe(
-    ()=> {},
-    (err)=> console.error( chalk.red(err) )
-  );
+  .pipe( tap( (logo) => console.log( chalk.magenta( `${logo}\nversion: ${version()}\n`) ) ))
+  .pipe( mergeMap( () => resetCredentials(args['serverid'])  ))
+  .subscribe({ 
+    error: (err)=> console.error( chalk.red(err) ) 
+  })
 
 }
 
 export function init() {
     rxFiglet( LOGO, undefined )
-    .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-    .pipe( flatMap( () => rxConfig( true, args['serverid']) ))
-    .subscribe(
-      ()=> {},
-      (err)=> console.error( chalk.red(err) )
-    );
+    .pipe( tap( (logo) => console.log( chalk.magenta( `${logo}\nversion: ${version()}\n`) ) ))
+    .pipe( mergeMap( () => createOrUpdateConfig( { serverId: args['serverid'], force: true  }  ) ))
+    .subscribe({ 
+      error: (err)=> console.error( chalk.red(err) ) 
+    })
 
 }
 
 export function info() {
     rxFiglet( LOGO, undefined )
-    .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-    .pipe( flatMap( () => rxConfig( false ) ))
-    .subscribe(
-      ()=> {},
-      (err)=> console.error( chalk.red(err) )
-    );
-
+    .pipe( tap( (logo) => console.log( chalk.magenta( `${logo}\nversion: ${version()}\n`) ) ))
+    .pipe( mergeMap( () => printConfig() ))
+    .subscribe( {  
+      error: (err) => console.error( chalk.red(err) )
+    })
+    
 }
 
 export function remove() {
     rxFiglet( LOGO, undefined )
-    .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-    .pipe( flatMap( () => rxConfig(false) ))
-    .pipe( flatMap( (result) => rxConfluenceConnection( result[0], result[1]  ) ))
-    .pipe( flatMap( (result) => rxDelete( result[0], result[1] ) ))
-    .subscribe(
-      (value)=> { console.log( '# page(s) removed ', value )},
-      (err)=> console.error( chalk.red(err) )
-    ); 
+    .pipe( tap( (logo) => console.log( chalk.magenta( `${logo}\nversion: ${version()}\n`) ) ))
+    .pipe( mergeMap( () => createOrUpdateConfig( { serverId: args['serverid'] } ) ))
+    .pipe( mergeMap( ([config,credentials]) => rxConfluenceConnection( config, credentials  ) ))
+    .pipe( mergeMap( ([service,config]) => rxDelete( service, config ) ))
+    .subscribe({
+      next: (value)=> { console.log( '# page(s) removed ', value )},
+      error: (err)=> console.error( chalk.red(err) )
+    }) 
 }
 
 
-export function download( pageId:string, fileName:string, isStorageFormat = true ) {
+export function download( pageId:string, fileName:string, isWikiFormat = false ) {
 
-  function rxRequest( config:Config, credentials:Credentials ):Observable<string> {
+  function rxRequest( config:ConfigItem, credentials:Credentials ):Observable<string> {
     return Observable.create( (observer:Observer<string>) => {
 
-      let pathname = isStorageFormat ?
-      "/plugins/viewstorage/viewpagestorage.action" :
-      "pages/viewpagesrc.action";
+      let pathname = isWikiFormat ?
+        "/pages/viewpagesrc.action" :
+        "/plugins/viewstorage/viewpagestorage.action" 
 
-      let input = URL.format({ 
-        protocol:config.protocol,
-        host: config.host,
-        port: String(config.port),
-        auth: credentials.username + ":" + credentials.password,
-        pathname: config.path + pathname,
-        query:{ pageId:pageId}    
-      });
-
-      console.log(input);
+      let input = `${config.protocol}//${config.host}:${config.port}${removeSuffixFromPath( config.path ) + pathname}?pageId=${pageId}` 
+      
+      // URL.format({ 
+      //   protocol:config.protocol,
+      //   host: config.host,
+      //   port: String(config.port),
+      //   auth: `${credentials.username}:${credentials.password}`,
+      //   pathname: removeSuffixFromPath( config.path ) + pathname,
+      //   query:{ pageId:pageId}    
+      // });
+      
+      console.log('url:', input )
 
       request( { 
-        url:input
+        url: input,
+        auth: {
+          user: credentials.username,
+          pass: credentials.password
+        }
       } )
       .pipe( fs.createWriteStream(fileName) )
       .on("end", () => observer.complete() )
@@ -143,26 +159,47 @@ export function download( pageId:string, fileName:string, isStorageFormat = true
 
 
   rxFiglet( LOGO, undefined )
-  .pipe( tap( (logo) => console.log( chalk.magenta(logo as string) ) ))
-  .pipe( flatMap( () => rxConfig( false ) ))
-  .pipe(  flatMap( ([config,credentials]) => rxRequest( config, credentials) ))
-  .subscribe( 
-    (res) => {
-      console.log(res)
-     } ,
-    err => console.error( chalk.red(err) )
-  );
-/*
-  .flatMap( ([config,credentials]) => rxConfluenceConnection( config, credentials ) )
-  .flatMap( ([confluence,config]) => Rx.Observable.fromPromise( confluence.getPageById( pageId )) )
-    .subscribe( 
-      (res) => {
-        console.log(res.title)
-       } ,
-      err => console.error( chalk.red(err) )
-    );
- */
+  .pipe( tap( (logo) => console.log( chalk.magenta( `${logo}\nversion: ${version()}\n`) ) ))
+  .pipe( mergeMap( () => createOrUpdateConfig( { serverId: args['serverid'] }  ) ))
+  .pipe(  mergeMap( ([config,credentials]) => rxRequest( config, credentials) ))
+  .subscribe({
+      next: (res) => console.log(res),
+      error: err => console.error( chalk.red(err) )
+  })
+
   }
+
+/**
+ * 
+ */
+export function usage() {
+
+  rxFiglet( LOGO, LOGO_FONT )
+  .pipe( tap( { complete: () => process.exit(-1) } ))
+  .subscribe( (logo) => {
+
+    console.log( chalk.magenta( `${logo}\nversion: ${version()}\n`),
+`
+${chalk.cyan.underline('Usage:')}
+
+confluence-site 
+${usageCommand( 'init', '\t// create/update configuration', '--serverid <serverid>' )}
+${usageCommand( 'deploy', '\t\t// deploy site to confluence', '[--config]' )}
+${usageCommand( 'delete', '\t\t\t\t// delete site' )}
+${usageCommand( 'download', ' // download page content', '--pageid <pageid>', '[--file]', '[--wiki]' )}
+${usageCommand( 'info', '\t\t\t\t// show configuration' )}
+
+${chalk.cyan('Options:')}
+ --serverid\t${chalk.italic.gray('// it is the credentials\' profile.')}
+ --config\t${chalk.italic.gray('// force reconfiguration.')}
+ --pageid\t${chalk.italic.gray('// the page identifier.')}
+ --file \t${chalk.italic.gray('// the output file name.')}
+ --wiki \t${chalk.italic.gray('// indicate deprecated wiki content format ')}
+`);
+
+  });
+}
+
 } // end namespace command
 
 
@@ -187,67 +224,24 @@ switch( command ) {
   break;
   case "download":
   {
-    let pageid = args['pageid'];
-    commands.download( pageid, args["file"] || pageid, args["wiki"] || true );
+    const { pageid, file, wiki = false } = args;
+
+    const fileName = () => file ?? `${pageid}${(wiki) ? '.wiki' : '.xhtml'}` 
+
+    commands.download( pageid, fileName(), wiki );
   }
   break;
+  case 'descendant':
+    rxDisplayDescendent()
+  break;
   default:
-    usage();
-}
-
-/**
- * CLEAR SCREEN
- */
-function clrscr() {
-  //process.stdout.write('\033c');
-  process.stdout.write('\x1Bc');
-
+    commands.usage();
 }
 
 /**
  * 
  */
-function usageCommand( cmd:string, desc:string, ...args: string[]) {
-  desc = chalk.italic.gray(desc);
-  return args.reduce( (previousValue, currentValue)=> {
-    return util.format( "%s %s", previousValue, chalk.yellow(currentValue) );
-  }, '\n' + cmd ) + desc;
-}
-
-/**
- * 
- */
-function usage() {
-
-  rxFiglet( LOGO, LOGO_FONT )
-  .pipe( tap( undefined, undefined, () => process.exit(-1) ))
-  .subscribe( (logo) => {
-
-    console.log( chalk.bold.magenta(logo as string),
-`
-${chalk.cyan('Usage:')}
-confluence-site 
-${usageCommand( 'init', '\t// create/update configuration', '--serverid <serverid>' )}
-${usageCommand( 'deploy', '\t\t// deploy site to confluence', '[--config]' )}
-${usageCommand( 'delete', '\t\t\t\t// delete site' )}
-${usageCommand( 'download', ' // download page content', '--pageid <pageid>', '[--file]', '[--wiki]' )}
-${usageCommand( 'info', '\t\t\t\t// show configuration' )}
-
-${chalk.cyan('Options:')}
- --serverid\t${chalk.italic.gray('// it is the credentials\' profile.')}
- --config\t${chalk.italic.gray('// force reconfiguration.')}
- --pageid\t${chalk.italic.gray('// the page identifier.')}
- --file \t${chalk.italic.gray('// the output file name.')}
- --wiki \t${chalk.italic.gray('// indicate deprecated wiki content format ')}
-`);
-
-  });
-}
-
-/**
- * 
- */
-function newSiteProcessor( confluence:ConfluenceService, config:Config ):SiteProcessor<any> {
+function newSiteProcessor( confluence:ConfluenceService, config:ConfigItem ):SiteProcessor<any> {
 
     const ext = path.extname( path.basename( config.sitePath ) );
 
@@ -281,8 +275,8 @@ function newSiteProcessor( confluence:ConfluenceService, config:Config ):SitePro
  * 
  */
 function rxConfluenceConnection(
-                config:Config,
-                credentials:Credentials ):Observable<[ConfluenceService,Config]>
+                config:ConfigItem,
+                credentials:Credentials ):Observable<[ConfluenceService,ConfigItem]>
 {
 
       let rxConnection:Promise<ConfluenceService>;
@@ -308,46 +302,42 @@ function rxConfluenceConnection(
 
       }
       
-      return combineLatest( rxConnection, of( config ), 
-                (conn, conf) => { return [conn, conf] as [ConfluenceService,Config]; } );
-
+      return combineLatest( [rxConnection, of( config ) ] )
+            
 }
 
 /**
  * 
  */
-function rxDelete( confluence:ConfluenceService, config:Config  ):Observable<number> {
+function rxDelete( confluence:ConfluenceService, config:ConfigItem  ):Observable<number> {
     //let recursive = args['recursive'] || false;
 
-    let siteFile = path.basename( config.sitePath );
+    const siteFile = path.basename( config.sitePath );
 
-    let site = newSiteProcessor( confluence, config );
+    const site = newSiteProcessor( confluence, config );
     
-    let rxParentPage = from( confluence.getPage( config.spaceId, config.parentPageTitle) );
-    let rxParseSite = site.rxParse( siteFile );
+    const rxParentPage = from( confluence.getPage( config.spaceId, config.parentPageTitle) );
+    const rxParseSite = site.rxParse( siteFile );
 
-    return combineLatest( rxParentPage, rxParseSite, 
-            (parent,home) => [parent,home] as [Model.Page,Array<Object>])
-              //.doOnNext( (result) => console.dir( result ) )
-              .pipe( flatMap( (result) => {
+    return combineLatest( [rxParentPage, rxParseSite] )
+            .pipe( mergeMap( ([parent,page]) => {
                 
-                const [parent,page] = result;
                 const attrs = site.attributes( page );
 
-                let getHome = from( confluence.getPageByTitle( parent.id as string, attrs.name as string) );
+                const getHome = from( confluence.getPageByTitle( parent.id!, attrs.name!) );
 
                 return getHome
                         .pipe( filter( (home) => home!=null ) )
-                        .pipe( flatMap( (home) => 
-                              from(confluence.getDescendents( home.id as string))
-                                        .pipe( flatMap( summaries => from(summaries) ))
-                                        .pipe( flatMap( (page:Model.PageSummary) => 
-                                                from(confluence.removePageById( page.id as string))
+                        .pipe( mergeMap( (home) => 
+                              from(confluence.getDescendents( home.id!))
+                                        .pipe( mergeMap( summaries => from(summaries) ))
+                                        .pipe( mergeMap( (page:Model.PageSummary) => 
+                                                from(confluence.removePageById( page.id!))
                                                 .pipe( tap( r => console.log( "page:", page.title, "removed!", r )) )
                                                 .pipe( map( () => 1))
                                                 ))
                                         .pipe( reduce( ( acc ) => ++acc, 0 ))
-                                        .pipe( flatMap( n => 
+                                        .pipe( mergeMap( n => 
                                               from(confluence.removePageById(home.id as string) )
                                                               .pipe( tap( (r) => console.log( "page:", home.title, "removed!", r )))
                                                               .pipe( map( () => ++n ) )
@@ -361,14 +351,50 @@ function rxDelete( confluence:ConfluenceService, config:Config  ):Observable<num
 /**
  * 
  */
-function rxGenerateSite( config:Config, confluence:ConfluenceService ):Observable<any> {
+ function rxDisplayDescendent() {
+
+  const rxDescendent = ( confluence:ConfluenceService, config:ConfigItem ) => {
+    const siteFile = path.basename( config.sitePath );
+
+    const site = newSiteProcessor( confluence, config );
+    
+    const rxParentPage = from( confluence.getPage( config.spaceId, config.parentPageTitle) );
+    const rxParseSite = site.rxParse( siteFile );
+
+    return combineLatest( [rxParentPage, rxParseSite] )
+            .pipe( mergeMap( ([parent,page]) => {
+                
+                const attrs = site.attributes( page );
+
+                const getHome = from( confluence.getPageByTitle( parent.id!, attrs.name!) );
+
+                return getHome
+                        .pipe( filter(home => home!==null) )
+                        .pipe( mergeMap(home => confluence.getDescendents( home.id!)), mergeAll() )
+            }))  
+    }                    
+
+  from( createOrUpdateConfig( { serverId: args['serverid'] } ) )
+  .pipe( mergeMap( ([config,credentials]) => rxConfluenceConnection( config, credentials  ) ))
+  .pipe( mergeMap( ([service,config]) => rxDescendent( service, config ) ))
+  .subscribe({
+    next: (value)=> { console.log( '# page', value.title )},
+    error: (err)=> console.error( chalk.red(err) )
+  }) 
+
+}
+
+/**
+ * 
+ */
+function rxGenerateSite( config:ConfigItem, confluence:ConfluenceService ):Observable<any> {
 
     const siteFile = path.basename( config.sitePath );
 
     const site = newSiteProcessor( confluence, config );
 
     return site.rxStart( siteFile )
-    ;
 
 }
+
 
