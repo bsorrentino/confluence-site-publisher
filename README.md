@@ -74,7 +74,7 @@ Initilaize (create/update) the configuration. The configuration is stored into f
  key | description |
 ---- | ---- |
 serverId | It is the credentials' profile. Provided from command line option `--serverid`  |
-protocol | `http|https`. This information is deducted from url|
+protocol | `http\|https`. This information is deducted from url|
 host | host name or ip address. This information is deducted from url|
 port | port number. This information is deducted from url|
 path | url path. This information is deducted from url|
