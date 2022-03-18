@@ -74,7 +74,7 @@ Initilaize (create/update) the configuration. The configuration is stored into f
  key | description |
 ---- | ---- |
 serverId | It is the credentials' profile. Provided from command line option `--serverid`  |
-protocol | `http|https`. This information is deducted from url|
+protocol | `http\|https`. This information is deducted from url|
 host | host name or ip address. This information is deducted from url|
 port | port number. This information is deducted from url|
 path | url path. This information is deducted from url|
@@ -108,13 +108,13 @@ Show current configuration
 
 > Example
 > ```
-> site path:		site.xml
-> confluence url:		http://localhost:8080/
-> confluence space id:	MySpace
+> site path:		          site.xml
+> confluence url:		      http://localhost:8080/
+> confluence space id:	  MySpace
 > confluence parent page:	Home
-> serverid:		test
-> confluence username:	admin
-> confluence password:	*****
+> serverid:		            test
+> confluence username:	  admin
+> confluence password:	  *****
 > ```
 
 ## Developer usage
