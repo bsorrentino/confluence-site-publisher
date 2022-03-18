@@ -57,6 +57,7 @@
     "@types/yaml": "^1.9.7",
     "cz-conventional-changelog": "^3.3.0",
     "jest": "^27.4.7",
+    "standard-version": "^9.3.2",
     "travis-cli": "^1.0.9",
     "ts-jest": "^27.0.2",
     "ts-node": "^10.4.0",
