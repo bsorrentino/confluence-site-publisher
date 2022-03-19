@@ -28,7 +28,7 @@
     "publishing"
   ],
   "dependencies": {
-    "chalk": "^4.1.1",
+    "chalk": "^4.1.2",
     "extend": "^3.0.2",
     "figlet": "^1.5.0",
     "inquirer": "^7.3.3",
@@ -44,7 +44,6 @@
     "yaml": "^1.10.2"
   },
   "devDependencies": {
-    "@types/chalk": "^2.2.0",
     "@types/inquirer": "^7.3.1",
     "@types/jest": "^27.4.0",
     "@types/marked": "^4.0.1",
@@ -66,6 +65,14 @@
   "config": {
     "commitizen": {
       "path": "./node_modules/cz-conventional-changelog"
+    }
+  },
+  "standard-version": {
+    "skip": {
+      "changelog": false,
+      "bump": false,
+      "commit": false,
+      "tag": true
     }
   }
 }
