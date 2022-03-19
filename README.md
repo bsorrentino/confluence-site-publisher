@@ -108,13 +108,13 @@ Show current configuration
 
 > Example
 > ```
-> site path:		          site.xml
-> confluence url:		      http://localhost:8080/
-> confluence space id:	  MySpace
-> confluence parent page:	Home
-> serverid:		            test
-> confluence username:	  admin
-> confluence password:	  *****
+> site path:              site.xml
+> confluence url:         http://localhost:8080/
+> confluence space id:    MySpace
+> confluence parent page: Home
+> serverid:               test
+> confluence username:    admin
+> confluence password:    *****
 > ```
 
 ## Developer usage
