@@ -5,7 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "npx --package=ts-node -- ts-node-esm -r dotenv/config ado-authc.mts",
+    "start": "npx --package=ts-node -- ts-node --esm -r dotenv/config ado-authc.mts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

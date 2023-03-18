@@ -7,3 +7,6 @@ dist/
 #parcel
 .cache/
 .parcel-cache/
+.gitsecret/keys/random_seed
+!*.secret
+packages/ado-wiki/env.txt
