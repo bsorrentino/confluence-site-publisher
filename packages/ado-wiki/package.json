@@ -5,7 +5,8 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "npx --package=ts-node -- ts-node --esm -r dotenv/config ado-authc.mts",
+    "start": "npx --package=ts-node -- ts-node --esm -r dotenv/config src/ado-authc.mts",
+    "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -13,6 +14,7 @@
   "license": "ISC",
   "dependencies": {
     "azure-devops-node-api": "^12.0.0",
+    "preferences": "^2.0.2",
     "zx": "^7.2.1"
   },
   "devDependencies": {

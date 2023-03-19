@@ -4,7 +4,8 @@ import * as vm from "azure-devops-node-api";
 import * as CoreApi from "azure-devops-node-api/CoreApi"
 import * as WikiApi from "azure-devops-node-api/WikiApi";
 import * as WikiInterfaces from "azure-devops-node-api/interfaces/WikiInterfaces";
-import { createOrUpdatePage } from './pages.mjs' 
+import { VersionControlRecursionType } from 'azure-devops-node-api/interfaces/TfvcInterfaces.js';
+import { getPagesByWiki } from './pages.mjs';
 
 export async function getWebApi(serverUrl?: string): Promise<vm.WebApi> {
     serverUrl = serverUrl || process.env.API_URL
@@ -15,7 +16,12 @@ export async function getWebApi(serverUrl?: string): Promise<vm.WebApi> {
 }
 
 export async function getApi(serverUrl: string): Promise<vm.WebApi> {
-    const token = process.env.AZURE_PERSONAL_ACCESS_TOKEN!
+    const token = process.env.AZURE_PERSONAL_ACCESS_TOKEN
+
+    // GUARDS
+    if( !token ) throw `AZURE_PERSONAL_ACCESS_TOKEN not defined!`
+    if( token.trim().length===0 ) throw `AZURE_PERSONAL_ACCESS_TOKEN ise empty!`
+
     const authHandler = vm.getPersonalAccessTokenHandler(token);
     const option = undefined;
 
@@ -51,35 +57,15 @@ export async function getApi(serverUrl: string): Promise<vm.WebApi> {
     return vsts
 }
 
-export function getProject(): string {
-    const { API_PROJECT } = process.env
-
-    if( !API_PROJECT ) throw `API_PROJECT not defined!`
-
-    return API_PROJECT
-}
-
-
 
 // your collection url
 const serverUrl = "https://dev.azure.com/bartolomeosorrentino";
 
 export async function run() { 
-    const webApi = await getWebApi(serverUrl);
-    const wikiApiObject: WikiApi.IWikiApi = await webApi.getWikiApi();
-    const coreApiObject: CoreApi.ICoreApi = await webApi.getCoreApi();
 
-    // console.log( coreApiObject, wikiApiObject )
+    const pages = await getPagesByWiki( 'bartolomeosorrentino', 'powerplatform' )
 
-    const project = getProject();
-    console.log("Project:", project);
-
-    const projectObject = await coreApiObject.getProject(project);
-    
-    const wikis = await wikiApiObject.getAllWikis(project);
-    console.log("Wikis", wikis.map((wiki) => wiki.name));
-
-    let wikiId =  wikis[0].id;
+    if( !pages || pages.length === 0 ) throw `wiki projects not found!`
 
     // const createNewWiki = (wikis.length === 0);
     // if (createNewWiki) {
@@ -91,8 +77,6 @@ export async function run() {
     //     wikiId = wikis[0].id;
     // }
 
-    if( !wikiId ) throw `wikiId not found!`
-    
     // const pageText: NodeJS.ReadableStream = await wikiApiObject.getPageText(project, wikiId)
     // console.log("Wiki text", pageText.read().toString());
 
@@ -101,16 +85,13 @@ export async function run() {
     //     console.log("Wiki", deletedWiki.name, "deleted");
     // }
 
-    const res = await createOrUpdatePage( 
-        wikiApiObject,
-        {
-           project: project,
-           wiki: wikiId,
-           path: '/My Page 3',
-           content: '# MY FIRST PAGE 3.3'
-        }     
-    )
-    console.log( res )
+    // const page = await pages[0].getPageById( 9, VersionControlRecursionType.None, false )
+
+    const res = await pages[0].createPage({
+           path: '/My Page 7',
+           content: '# MY FIRST PAGE'
+    })
+    console.log( Object.entries(res.headers).find( ([k,v])  => k === 'etag' ) )
 
 }
 
