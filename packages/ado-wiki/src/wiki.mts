@@ -34,7 +34,7 @@ const pages_get_service_id = 'ceddcf75-1068-452d-8b13-2d4d76e1f970'
 /**
  * [Pages description]
  */
-export class WikiPages {
+export class WikiObject {
 
     constructor(
         private wikiApiObject: WikiApi.IWikiApi,
@@ -88,19 +88,23 @@ export class WikiPages {
     
     }
     
-
     /**
-     * 
-     * @param wikiApiObject {object} wiki api cleint
-     * @param params {CreateOrUpdatePageRequest} parameters
-     * 
+     * [createOrUpdatePage description]
+     *
+     * @param   {string}  params   [params description]
+     * @param   {string}  comment  [comment description]
+     * @param   {string}  content  [content description]
+     * @param   {string}  etag     [etag description]
+     *
+     * @return  {[type]}           [return description]
      * @see https://learn.microsoft.com/en-us/rest/api/azure/devops/wiki/pages/create-or-update?view=azure-devops-rest-7.0
      */
-    async createPage(params: { path: string, comment?: string, content?: string } ) {
+    async createOrUpdatePage(params: { path: string, comment?: string, content?: string, etag?: string } ) {  
+
         if (!this.projectObject.id) throw `project id not defined!`
         if (!this.wiki.id) throw `wiki id not defined!`
 
-        const { path, comment, content } = params
+        const { path, comment, content, etag } = params
 
         const { vsoClient, rest } = this.wikiApiObject
 
@@ -121,23 +125,35 @@ export class WikiPages {
             routeValues,
             queryValues);
 
-        // console.log( 'verData', verData)
-
         const url = verData.requestUrl
         if (!url) throw 'error calculating target url'
 
         const options = this.wikiApiObject.createRequestOptions('application/json', verData.apiVersion);
-        // console.log( 'options', options)
 
-        const res = await rest.replace<WikiPage>(url, { content: content }, options);
+        if( etag ) { // for updating
+            options.additionalHeaders = {
+                "if-match": etag
+            }    
+        }
 
-        // const result = this.wikiApiObject.formatResponse( res.result, {}, false)
-        return res
+        const res = await rest.replace<WikiPage>(url, { content: content }, options)
 
-    }
+        const h = res.headers as Record<string,any>
+
+        const result: WikiPageResponse = {
+            eTag:  [ h['etag'] ],
+            page: res.result ?? undefined
+        }
+
+        return result
+
+
+    }  
+
 }
 
 /**
+ * 
  * [WebApi description]
  *
  * @var {[type]}
@@ -184,15 +200,7 @@ async function getApi(serverUrl: string): Promise<vm.WebApi> {
     return vsts
 }
 
-/**
- * [async description]
- *
- * @param   {string}             organization  [organization description]
- * @param   {string<WikiPages>}  project       [project description]
- *
- * @return  {Array<WikiPages>}                 [return description]
- */
-export async function getPagesByWiki(organization: string, project: string,): Promise<Array<WikiPages>> {
+export async function getAllWikis( organization: string, project: string ) {
 
     const serverUrl = `https://dev.azure.com/${organization}`
 
@@ -204,7 +212,24 @@ export async function getPagesByWiki(organization: string, project: string,): Pr
 
     const wikis = await wikiApiObject.getAllWikis(project);
 
-    return wikis.map(wid => (new WikiPages(wikiApiObject, projectObject, wid)))
+    return wikis.map(wid => (new WikiObject(wikiApiObject, projectObject, wid)))
+
+}
+
+export async function createWiki( organization: string, project: string, name: string  ) {
+
+    const serverUrl = `https://dev.azure.com/${organization}`
+
+    const webApi = await getApi(serverUrl);
+    const wikiApiObject = await webApi.getWikiApi();
+    const coreApiObject = await webApi.getCoreApi();
+
+    const projectObject = await coreApiObject.getProject(project);
+
+    const wikiParams = { name: name, projectId: projectObject.id };
+    const newWiki = await wikiApiObject.createWiki(wikiParams, project);
+
+    return new WikiObject( wikiApiObject, projectObject, newWiki )
 
 }
 

@@ -1,11 +1,8 @@
 import 'zx/globals'
 
 import * as vm from "azure-devops-node-api";
-import * as CoreApi from "azure-devops-node-api/CoreApi"
-import * as WikiApi from "azure-devops-node-api/WikiApi";
-import * as WikiInterfaces from "azure-devops-node-api/interfaces/WikiInterfaces";
 import { VersionControlRecursionType } from 'azure-devops-node-api/interfaces/TfvcInterfaces.js';
-import { getPagesByWiki } from './pages.mjs';
+import { getAllWikis } from './wiki.mjs';
 
 export async function getWebApi(serverUrl?: string): Promise<vm.WebApi> {
     serverUrl = serverUrl || process.env.API_URL
@@ -63,39 +60,26 @@ const serverUrl = "https://dev.azure.com/bartolomeosorrentino";
 
 export async function run() { 
 
-    const pages = await getPagesByWiki( 'bartolomeosorrentino', 'powerplatform' )
+    const wikis = await getAllWikis( 'bartolomeosorrentino', 'powerplatform' )
 
-    if( !pages || pages.length === 0 ) throw `wiki projects not found!`
+    if( !wikis || wikis.length === 0 ) throw `wiki projects not found!`
 
-    // const createNewWiki = (wikis.length === 0);
-    // if (createNewWiki) {
-    //     const wikiParams = { name: "Hello Wiki", projectId: projectObject.id };
-    //     const newWiki = await wikiApiObject.createWiki(wikiParams, project);
-    //     console.log("Wiki created:", newWiki.name);
-    //     wikiId = newWiki.id;
-    // } else {
-    //     wikiId = wikis[0].id;
-    // }
+    const wiki = wikis[0]
 
-    // const pageText: NodeJS.ReadableStream = await wikiApiObject.getPageText(project, wikiId)
-    // console.log("Wiki text", pageText.read().toString());
+    const { page, eTag } = await wiki.getPageById( 17, VersionControlRecursionType.None, true )
 
-    // if (createNewWiki) {
-    //     const deletedWiki: WikiInterfaces.WikiV2 = await wikiApiObject.deleteWiki(wikiId, project);
-    //     console.log("Wiki", deletedWiki.name, "deleted");
-    // }
+    console.log( eTag, page )
 
-    // const page = await pages[0].getPageById( 9, VersionControlRecursionType.None, false )
+    if( page && eTag ) {
 
-    const res = await pages[0].createPage({
-           path: '/My Page 7',
-           content: '# MY FIRST PAGE'
-    })
-    console.log( Object.entries(res.headers).find( ([k,v])  => k === 'etag' ) )
+        const res = await wiki.createOrUpdatePage({
+            path: page.path!,
+            content: page.content! + Date(),
+            etag: eTag[0]
+        })
+        console.log( res )
+    }
 
 }
-
-
-
 
 run().catch( e => console.error( e ) )
