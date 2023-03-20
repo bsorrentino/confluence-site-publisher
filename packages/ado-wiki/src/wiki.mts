@@ -41,6 +41,53 @@ export class WikiObject {
         private projectObject: TeamProject,
         private wiki: WikiV2) { }
 
+        async getPageByPath(path: string, recursionLevel?: VersionControlRecursionType, includeContent?: boolean): Promise<WikiPageResponse> {
+
+            if (!this.projectObject.id) throw `project id not defined!`
+            if (!this.wiki.id) throw `wiki id not defined!`
+    
+            const { vsoClient, createAcceptHeader, http, formatResponse, rest } = this.wikiApiObject
+    
+            const routeValues = {
+                project: this.projectObject.id,
+                wikiIdentifier: this.wiki.id
+            }
+    
+            const queryValues = {
+                path: path,
+                recursionLevel: recursionLevel,
+                includeContent: includeContent,
+            }
+    
+            const verData = await vsoClient.getVersioningData(
+                api_version,
+                api_category,
+                pages_get_service_id,
+                routeValues,
+                queryValues)
+    
+            const { requestUrl: url, apiVersion } = verData
+    
+            if (!url) throw `url not defined!`
+            if (!apiVersion) throw `apiVersion not defined!`
+    
+            const accept: string = createAcceptHeader("application/json", apiVersion)
+    
+            const res =  await http.get(url, { "Accept": accept })
+            
+            const body = await res.readBody()
+    
+            const eTag = res.message.headers['etag'] ?? ''
+            
+            const result:WikiPageResponse = {
+                eTag:  [ eTag ],
+                page: JSON.parse( body )
+            }
+    
+           return result
+        
+        }
+    
     async getPageById(page_id: number, recursionLevel?: VersionControlRecursionType, includeContent?: boolean): Promise<WikiPageResponse> {
 
         if (!this.projectObject.id) throw `project id not defined!`
